@@ -5,19 +5,19 @@ This checklist outlines the complete roadmap to build, test, and deploy the Grou
 ---
 
 ## Phase 1: Project Setup, Environment & Architecture Foundations
-- [ ] **1.1 Directory Structure & Workspace Scaffolding**
+- [x] **1.1 Directory Structure & Workspace Scaffolding**
   - Set up `backend/`, `frontend/`, and `prompts/` directories matching the architecture specification.
   - Initialize root `.gitignore` to protect virtual environments, node modules, `.env` secrets, and database files.
-- [ ] **1.2 Backend Environment & Core Dependencies**
+- [x] **1.2 Backend Environment & Core Dependencies**
   - Create `backend/requirements.txt` with FastAPI, Uvicorn, Pydantic v2, SQLAlchemy, ChromaDB/Qdrant-client, PyPDF, PDFPlumber, OpenAI, Groq, Passlib, python-jose, and python-multipart.
   - Set up `.env.example` with configuration variables: `DATABASE_URL`, `OPENAI_API_KEY`, `GROQ_API_KEY`, `SIMILARITY_THRESHOLD`, `JWT_SECRET`, `LLM_PROVIDER`.
-- [ ] **1.3 Production System Prompt Setup**
+- [x] **1.3 Production System Prompt Setup**
   - Create `prompts/system_prompt.txt` with zero-hallucination directives, clause-citation requirements, and deterministic refusal rules.
 
 ---
 
 ## Phase 2: Database Models, Multi-Tenancy & Authentication Engine
-- [ ] **2.1 Relational Database Engine & Migration Setup**
+- [x] **2.1 Relational Database Engine & Migration Setup**
   - Implement SQLite/PostgreSQL connection in `backend/app/core/database.py`.
   - Create SQLAlchemy models in `backend/app/models/`:
     - `Account` (Multi-tenant branch entity: `id`, `branch_name`, `branch_code`).
@@ -25,16 +25,16 @@ This checklist outlines the complete roadmap to build, test, and deploy the Grou
     - `PasswordResetToken` (`id`, `user_id`, `token_hash`, `expires_at`, `used`).
     - `Document` (`id`, `account_id`, `filename`, `doc_type`, `version`, `effective_date`, `is_discontinued`, `status`).
     - `ComplianceAuditLog` (`id`, `account_id`, `user_id`, `query`, `rewritten_query`, `similarity_score`, `response`, `is_refusal`, `latency_ms`).
-- [ ] **2.2 Authentication & Password Management Services**
-  - Implement password hashing and verification using `passlib[bcrypt]` in `backend/app/core/security.py`.
+- [x] **2.2 Authentication & Password Management Services**
+  - Implement password hashing and verification using direct `bcrypt` in `backend/app/core/security.py`.
   - Implement JWT issuance and token validation (with claims: `sub`, `account_id`, `role`).
   - Implement forgot password token generation and password reset verification logic.
-- [ ] **2.3 Auth REST API Endpoints**
+- [x] **2.3 Auth REST API Endpoints**
   - Implement `POST /api/v1/auth/login` (email/password validation, token issuance).
   - Implement `POST /api/v1/auth/forgot-password` (token generation).
   - Implement `POST /api/v1/auth/reset-password` (token verification and password update).
   - Implement `GET /api/v1/auth/me` (current authenticated profile).
-- [ ] **2.4 FastAPI Dependencies & Tenant Isolation Middleware**
+- [x] **2.4 FastAPI Dependencies & Tenant Isolation Middleware**
   - Implement `get_current_user` and `require_role(role)` in `backend/app/api/deps.py`.
   - Enforce mandatory tenant filtering using extracted `account_id`.
 
@@ -105,9 +105,9 @@ This checklist outlines the complete roadmap to build, test, and deploy the Grou
 
 ## Phase 6: Automated Verification, Quality Benchmarks & Documentation
 - [ ] **6.1 Unit & Integration Test Suite**
-  - Implement `tests/test_auth.py` (login, password reset, unauthorized access checks).
-  - Implement `tests/test_account_isolation.py` (verify Tenant A cannot retrieve Tenant B vectors).
-  - Implement `tests/test_hard_refusal.py` (verify confidence $< 0.68$ triggers exact refusal).
+  - [x] Implement `tests/test_auth.py` (login, password reset, unauthorized access, RBAC, tenant context).
+  - [ ] Implement `tests/test_account_isolation.py` (verify Tenant A cannot retrieve Tenant B vectors).
+  - [ ] Implement `tests/test_hard_refusal.py` (verify confidence $< 0.68$ triggers exact refusal).
   - Implement `tests/test_discontinued_product.py` (verify discontinued products are excluded from responses).
   - Implement `tests/test_cumulative_retrieval.py` (verify documents uploaded on different days accumulate in retrieval).
 - [ ] **6.2 End-to-End Validation & Audit Readiness**
