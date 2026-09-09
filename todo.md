@@ -83,23 +83,23 @@ This checklist outlines the complete roadmap to build, test, and deploy the Grou
 ---
 
 ## Phase 5: Next.js Frontend Application
-- [ ] **5.1 Project Initialization & Design System**
+- [x] **5.1 Project Initialization & Design System**
   - Initialize Next.js 14 App Router project with TypeScript and Tailwind CSS.
   - Configure modern dark/light banking theme, typography, and Lucide icons.
-- [ ] **5.2 Authentication & Route Guards**
+- [x] **5.2 Authentication & Route Guards**
   - Implement Login screen (`/login`) with email/password validation.
   - Implement Forgot Password (`/forgot-password`) and Reset Password (`/reset-password`) screens.
   - Implement JWT storage, session hydration, and route protection for `RM` vs `ComplianceAdmin`.
-- [ ] **5.3 Relationship Manager Streaming Chat Interface**
+- [x] **5.3 Relationship Manager Streaming Chat Interface**
   - Build responsive chat view (`/`) with auto-scrolling message list.
   - Implement SSE stream consumer displaying real-time word-by-word generation.
   - Implement interactive clickable `CitationBadge` tags inside assistant responses.
   - Build slide-out `CitationDrawer` displaying the underlying document name, version, clause, and exact text excerpt.
-- [ ] **5.4 Document Management & Upload Drawer**
+- [x] **5.4 Document Management & Upload Drawer**
   - Build `/documents` interface allowing users/admins to view cumulative document stores.
   - Implement drag-and-drop PDF/DOCX upload modal with inputs for `doc_type`, `version`, `effective_date`, and `is_discontinued`.
   - Provide real-time upload and indexing status feedback.
-- [ ] **5.5 Compliance Officer Audit Dashboard**
+- [x] **5.5 Compliance Officer Audit Dashboard**
   - Build `/audit` interface restricted to `ComplianceAdmin`.
   - Implement searchable, filterable table displaying queries, timestamps, RM names, similarity scores, refusal indicators, and retrieved chunks.
 
