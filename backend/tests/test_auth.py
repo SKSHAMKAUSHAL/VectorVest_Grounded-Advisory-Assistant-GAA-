@@ -1,116 +1,14 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-import sys
-from pathlib import Path
 
-# Ensure backend directory is in path
-backend_dir = Path(__file__).resolve().parent.parent
-if str(backend_dir) not in sys.path:
-    sys.path.insert(0, str(backend_dir))
-
-from app.core.database import Base, get_db
-from app.core.security import get_password_hash
-from app.models.models import Account, User, PasswordResetToken
-from app.main import app
-
-# In-memory SQLite for testing
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-app.dependency_overrides[get_db] = override_get_db
-
-@pytest.fixture(autouse=True)
-def setup_database():
-    """Create fresh tables and seed test fixtures before each test."""
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-
-    # Seed Accounts
-    acc_central = Account(
-        id="branch_12_central",
-        branch_name="Central Branch #12",
-        branch_code="BR-12",
-    )
-    acc_north = Account(
-        id="branch_01_north",
-        branch_name="North Branch #01",
-        branch_code="BR-01",
-    )
-    db.add(acc_central)
-    db.add(acc_north)
-    db.commit()
-
-    # Seed Users
-    rm_user = User(
-        id="usr_rm_test",
-        account_id="branch_12_central",
-        email="rm_test@wealth.bank.com",
-        password_hash=get_password_hash("TestPassword123!"),
-        full_name="Test RM",
-        role="RM",
-        is_active=True,
-    )
-    compliance_user = User(
-        id="usr_comp_test",
-        account_id="branch_12_central",
-        email="comp_test@wealth.bank.com",
-        password_hash=get_password_hash("AdminPassword123!"),
-        full_name="Test Compliance Officer",
-        role="ComplianceAdmin",
-        is_active=True,
-    )
-    north_rm_user = User(
-        id="usr_north_rm_test",
-        account_id="branch_01_north",
-        email="north_rm@wealth.bank.com",
-        password_hash=get_password_hash("NorthPassword123!"),
-        full_name="North RM",
-        role="RM",
-        is_active=True,
-    )
-    db.add(rm_user)
-    db.add(compliance_user)
-    db.add(north_rm_user)
-    db.commit()
-    db.close()
-
-    yield
-
-    # Clean up all data between tests
-    cleanup_db = TestingSessionLocal()
-    cleanup_db.query(PasswordResetToken).delete()
-    cleanup_db.query(User).delete()
-    cleanup_db.query(Account).delete()
-    cleanup_db.commit()
-    cleanup_db.close()
-    Base.metadata.drop_all(bind=engine)
-
-client = TestClient(app)
-
-def test_health_check():
+def test_health_check(client: TestClient):
     """Tests the root health check endpoint."""
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
 
-def test_login_success():
+def test_login_success(client: TestClient):
     """Tests successful login and JWT issuance with tenant claims."""
     response = client.post(
         "/api/v1/auth/login",
@@ -124,7 +22,7 @@ def test_login_success():
     assert data["user"]["role"] == "RM"
     assert data["user"]["account_id"] == "branch_12_central"
 
-def test_login_invalid_password():
+def test_login_invalid_password(client: TestClient):
     """Tests rejected login when wrong password is provided."""
     response = client.post(
         "/api/v1/auth/login",
@@ -133,7 +31,7 @@ def test_login_invalid_password():
     assert response.status_code == 401
     assert "Incorrect email or password" in response.json()["detail"]
 
-def test_login_nonexistent_user():
+def test_login_nonexistent_user(client: TestClient):
     """Tests rejected login for non-existent user."""
     response = client.post(
         "/api/v1/auth/login",
@@ -141,7 +39,7 @@ def test_login_nonexistent_user():
     )
     assert response.status_code == 401
 
-def test_get_me_profile():
+def test_get_me_profile(client: TestClient):
     """Tests retrieval of authenticated profile via /api/v1/auth/me."""
     login_res = client.post(
         "/api/v1/auth/login",
@@ -158,12 +56,12 @@ def test_get_me_profile():
     assert user_data["email"] == "rm_test@wealth.bank.com"
     assert user_data["account_id"] == "branch_12_central"
 
-def test_protected_route_without_token():
+def test_protected_route_without_token(client: TestClient):
     """Tests that protected route fails with 401 when Authorization header is missing."""
     response = client.get("/api/v1/auth/me")
     assert response.status_code == 401
 
-def test_protected_route_invalid_token():
+def test_protected_route_invalid_token(client: TestClient):
     """Tests that protected route fails with 401 when token is forged or malformed."""
     response = client.get(
         "/api/v1/auth/me",
@@ -171,7 +69,7 @@ def test_protected_route_invalid_token():
     )
     assert response.status_code == 401
 
-def test_rbac_compliance_admin_allowed():
+def test_rbac_compliance_admin_allowed(client: TestClient):
     """Tests that ComplianceAdmin can access compliance restricted route."""
     login_res = client.post(
         "/api/v1/auth/login",
@@ -186,7 +84,7 @@ def test_rbac_compliance_admin_allowed():
     assert response.status_code == 200
     assert response.json()["status"] == "authorized"
 
-def test_rbac_rm_forbidden():
+def test_rbac_rm_forbidden(client: TestClient):
     """Tests that RM role receives 403 Forbidden when trying to access compliance route."""
     login_res = client.post(
         "/api/v1/auth/login",
@@ -201,7 +99,7 @@ def test_rbac_rm_forbidden():
     assert response.status_code == 403
     assert "Access denied" in response.json()["detail"]
 
-def test_password_reset_flow():
+def test_password_reset_flow(client: TestClient):
     """Tests complete forgot-password -> reset-password -> login workflow."""
     # 1. Request reset token
     forgot_res = client.post(
@@ -243,7 +141,7 @@ def test_password_reset_flow():
     )
     assert reuse_res.status_code == 400
 
-def test_multi_tenant_isolation_scopes():
+def test_multi_tenant_isolation_scopes(client: TestClient):
     """Verifies that different branches receive isolated account scopes in tokens."""
     res_central = client.post(
         "/api/v1/auth/login",

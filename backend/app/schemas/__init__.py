@@ -8,6 +8,11 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     ResetPasswordResponse,
 )
+from app.schemas.document import (
+    DocumentUploadResponse,
+    DocumentItemResponse,
+    DocumentListResponse,
+)
 
 __all__ = [
     "LoginRequest",
@@ -18,4 +23,7 @@ __all__ = [
     "ForgotPasswordResponse",
     "ResetPasswordRequest",
     "ResetPasswordResponse",
+    "DocumentUploadResponse",
+    "DocumentItemResponse",
+    "DocumentListResponse",
 ]
