@@ -6,6 +6,8 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1.auth import router as auth_router
 from app.api.v1.documents import router as documents_router
+from app.api.v1.chat import router as chat_router
+from app.api.v1.audit import router as audit_router
 from app.api.deps import require_role
 from app.models.models import User
 
@@ -34,6 +36,8 @@ app.add_middleware(
 # Mount API Routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(documents_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")
+app.include_router(audit_router, prefix="/api/v1")
 
 @app.get("/health", tags=["System"])
 def health_check():

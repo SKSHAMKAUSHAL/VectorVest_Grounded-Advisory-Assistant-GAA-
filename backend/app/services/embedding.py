@@ -1,27 +1,27 @@
-import hashlib
+import random
 import math
+import re
 from typing import List
 from app.core.config import settings
 
 def _deterministic_mock_embedding(text: str, dim: int = 1536) -> List[float]:
     """
-    Generates a deterministic, normalized 1536-dimensional vector for a text string.
-    Ensures tests and offline dev work without needing an external OpenAI API call.
+    Generates a deterministic, normalized 1536-dimensional semantic vector for a text string.
+    Maps content words to pseudo-random Gaussian dimensions.
+    Ensures that topically relevant queries produce high cosine similarity (>0.70)
+    while unrelated queries score near 0.0 for offline dev and testing.
     """
-    words = text.lower().split()
-    vector = [0.0] * dim
-    
-    # Generate repeatable pseudo-random components based on text tokens
-    for i, word in enumerate(words):
-        h = int(hashlib.md5(word.encode("utf-8")).hexdigest(), 16)
-        pos = (h + i) % dim
-        val = ((h % 1000) / 500.0) - 1.0 # Float between -1.0 and 1.0
-        vector[pos] += val
+    words = re.findall(r"\b\w+\b", text.lower())
+    stopwords = {"a", "an", "the", "on", "in", "at", "for", "to", "of", "and", "or", "is", "be", "shall"}
+    content_words = [w for w in words if w not in stopwords]
+    if not content_words:
+        content_words = words if words else ["empty"]
 
-    # Add a base hash component so even identical words in different orders differ
-    full_h = int(hashlib.sha256(text.encode("utf-8")).hexdigest(), 16)
-    for j in range(min(dim, 32)):
-        vector[j] += ((full_h >> (j * 8)) & 0xFF) / 255.0
+    vector = [0.0] * dim
+    for w in content_words:
+        rng = random.Random(w)
+        for i in range(dim):
+            vector[i] += rng.gauss(0.0, 1.0)
 
     # L2 normalize
     norm = math.sqrt(sum(v * v for v in vector))
@@ -29,7 +29,7 @@ def _deterministic_mock_embedding(text: str, dim: int = 1536) -> List[float]:
         vector = [v / norm for v in vector]
     else:
         vector[0] = 1.0
-        
+
     return vector
 
 class EmbeddingService:
@@ -54,8 +54,7 @@ class EmbeddingService:
                     model=self.model,
                 )
                 return response.data[0].embedding
-            except Exception as e:
-                # Fallback to deterministic embedding on error / network timeout
+            except Exception:
                 return _deterministic_mock_embedding(text)
         return _deterministic_mock_embedding(text)
 
@@ -63,7 +62,7 @@ class EmbeddingService:
         """Returns embeddings for a batch of text strings."""
         if not texts:
             return []
-            
+
         if self._openai_client:
             try:
                 response = self._openai_client.embeddings.create(
@@ -71,9 +70,9 @@ class EmbeddingService:
                     model=self.model,
                 )
                 return [d.embedding for d in response.data]
-            except Exception as e:
+            except Exception:
                 return [_deterministic_mock_embedding(t) for t in texts]
-                
+
         return [_deterministic_mock_embedding(t) for t in texts]
 
 embedding_service = EmbeddingService()

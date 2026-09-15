@@ -13,6 +13,14 @@ from app.schemas.document import (
     DocumentItemResponse,
     DocumentListResponse,
 )
+from app.schemas.chat import (
+    ChatMessage,
+    ChatQueryRequest,
+    CitationItem,
+    ChatQueryResponse,
+    AuditLogItemResponse,
+    AuditLogListResponse,
+)
 
 __all__ = [
     "LoginRequest",
@@ -26,4 +34,10 @@ __all__ = [
     "DocumentUploadResponse",
     "DocumentItemResponse",
     "DocumentListResponse",
+    "ChatMessage",
+    "ChatQueryRequest",
+    "CitationItem",
+    "ChatQueryResponse",
+    "AuditLogItemResponse",
+    "AuditLogListResponse",
 ]
