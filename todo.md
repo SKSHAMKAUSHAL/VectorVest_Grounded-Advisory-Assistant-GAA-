@@ -41,20 +41,21 @@ This checklist outlines the complete roadmap to build, test, and deploy the Grou
 ---
 
 ## Phase 3: Document Ingestion, PDF Processing & Vector Indexing Pipeline
-- [ ] **3.1 Document Text Extraction & Cleaning Engine**
+- [x] **3.1 Document Text Extraction & Cleaning Engine**
   - Implement parser in `backend/app/services/ingestion.py` using `pypdf` and `pdfplumber`.
   - Strip redundant running headers, footers, page numbering, and whitespace artifacts.
-- [ ] **3.2 Clause-Boundary Chunking Algorithm**
+- [x] **3.2 Clause-Boundary Chunking Algorithm**
   - Implement `chunk_document_by_clause` in `backend/app/services/chunking.py`.
   - Split documents on regulatory section headers (`Section`, `Clause`, `Article`, decimal numbering `X.Y`).
   - Implement recursive token splitting fallback (500 tokens max, 50 token overlap) for long clauses.
-- [ ] **3.3 Embedding Service & Vector Database Client**
-  - Implement vector embedding generator in `backend/app/services/embedding.py` using OpenAI `text-embedding-3-small` (1536 dimensions).
-  - Configure vector database client (`ChromaDB` / `Qdrant`) with HNSW index and metadata filtering.
-- [ ] **3.4 Cumulative Upload API Endpoint**
+- [x] **3.3 Embedding Service & Vector Database Client**
+  - Implement vector embedding generator in `backend/app/services/embedding.py` using OpenAI `text-embedding-3-small` (1536 dimensions) with deterministic offline fallback.
+  - Configure vector database client (`ChromaDB`) with HNSW index and metadata filtering.
+- [x] **3.4 Cumulative Upload API Endpoint**
   - Implement `POST /api/v1/documents/upload` accepting multipart file, `doc_type`, `version`, `effective_date`, and `is_discontinued`.
   - Persist document record, chunk text, embed vectors, and store payloads with `account_id` partitioning.
   - Implement `GET /api/v1/documents` to list indexed files, versions, and chunk counts per account.
+  - Implement `DELETE /api/v1/documents/{document_id}` for compliance administrators.
 
 ---
 
@@ -106,10 +107,9 @@ This checklist outlines the complete roadmap to build, test, and deploy the Grou
 ## Phase 6: Automated Verification, Quality Benchmarks & Documentation
 - [ ] **6.1 Unit & Integration Test Suite**
   - [x] Implement `tests/test_auth.py` (login, password reset, unauthorized access, RBAC, tenant context).
-  - [ ] Implement `tests/test_account_isolation.py` (verify Tenant A cannot retrieve Tenant B vectors).
+  - [x] Implement `tests/test_ingestion.py` (clause chunking, PDF parsing, cumulative vector storage, discontinued filtering, tenant isolation).
+  - [ ] Implement `tests/test_account_isolation.py` (verify Tenant A cannot retrieve Tenant B vectors in RAG).
   - [ ] Implement `tests/test_hard_refusal.py` (verify confidence $< 0.68$ triggers exact refusal).
-  - Implement `tests/test_discontinued_product.py` (verify discontinued products are excluded from responses).
-  - Implement `tests/test_cumulative_retrieval.py` (verify documents uploaded on different days accumulate in retrieval).
 - [ ] **6.2 End-to-End Validation & Audit Readiness**
   - Validate citation coverage ($\ge 98\%$).
   - Measure response lookup latency ($\le 2\text{ min}$).
