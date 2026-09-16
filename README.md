@@ -167,3 +167,28 @@ Open `http://localhost:3000` in your browser.
 2. **Refusal Mechanism:** If no document matches with similarity score $\ge 0.68$, the system returns an explicit refusal:
    > *"I cannot find approved bank guidance on this topic within your account's uploaded documentation. Please escalate this request to the Compliance and Legal Department."*
 3. **Mandatory Citations:** Every single factual claim must carry an inline citation badge linking directly to the document name, version, and clause/page number.
+
+---
+
+## 9. Document Upload Modal, Metadata & PostgreSQL
+
+The document management screen provides an upload modal for adding approved source material to an account's cumulative knowledge store. Users can click the file area or drag and drop a document into the modal. Supported upload formats are PDF, TXT, and DOCX.
+
+Before indexing, the uploader records the metadata required for retrieval and compliance filtering:
+
+- **Document type:** Policy Manual, Tax Circular, or Product Brochure
+- **Version:** The source document version, such as `v1.0` or `v4.2`
+- **Effective date:** The date from which the document is applicable
+- **Discontinued flag:** Marks sunset products so they are excluded from default RM retrieval
+
+After submission, the backend parses the document, creates clause-aware chunks, generates embeddings, and reports the document status, page count, and number of chunks created. Each document is associated with the authenticated account and uploader, preserving tenant isolation. Stored records also include supersession information, indexing status, upload timestamp, and cumulative chunk totals.
+
+### PostgreSQL Configuration
+
+The backend uses SQLAlchemy-compatible database configuration through `DATABASE_URL`. Local development defaults to SQLite, while PostgreSQL is recommended for shared or production deployments. Set the database connection string in `backend/.env`, for example:
+
+```env
+DATABASE_URL=postgresql+psycopg2://gaa_user:change-me@localhost:5432/gaa
+```
+
+The relational database stores accounts, users, documents, and compliance audit records. Vector embeddings remain in the configured ChromaDB store, with document metadata and account identifiers used to enforce retrieval filters. Database credentials must remain in environment variables and must not be committed to the repository.
