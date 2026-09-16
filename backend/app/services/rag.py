@@ -1,3 +1,13 @@
+# RAG service flow:
+# 1. Rewrite conversational queries into standalone search queries.
+# 2. Generate an embedding for the rewritten query.
+# 3. Retrieve relevant chunks from the tenant-scoped vector store.
+# 4. Apply the similarity threshold guardrail.
+# 5. Build grounded context and structured citations for generation.
+#
+# This module intentionally keeps retrieval and response-generation
+# preparation separate so each stage can be tested independently.
+
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 from app.core.config import settings
@@ -81,7 +91,9 @@ class RAGPipeline:
         chat_history = chat_history or []
         rewritten_query = self.rewrite_query(query, chat_history)
 
-        # 1. Generate query embedding
+   # 1. Generate query embedding.
+# The rewritten query is embedded rather than the original follow-up
+# question so retrieval can operate on a complete search intent.
         query_vec = embedding_service.get_embedding(rewritten_query)
 
         # 2. Retrieve candidates scoped to account
