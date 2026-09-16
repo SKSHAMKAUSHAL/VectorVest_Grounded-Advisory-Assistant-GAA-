@@ -1,3 +1,4 @@
+
 import io
 import os
 import shutil
@@ -11,6 +12,29 @@ from app.models.models import Document
 from app.services.chunking import chunk_document_pages, clean_text
 from app.services.embedding import embedding_service
 from app.services.vector_store import vector_store
+
+
+# Document ingestion pipeline:
+#
+# Uploaded file
+#     ↓
+# File persistence
+#     ↓
+# Database document record
+#     ↓
+# Text extraction
+#     ↓
+# Clause-aware chunking
+#     ↓
+# Embedding generation
+#     ↓
+# Vector store indexing
+#     ↓
+# Document status update
+#
+# The pipeline keeps document processing separate from API routing so
+# ingestion can be reused independently of the upload endpoint.
+
 
 def extract_pages_from_pdf_bytes(file_bytes: bytes) -> List[Dict[str, Any]]:
     """Extracts text per page from in-memory PDF bytes."""
