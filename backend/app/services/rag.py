@@ -185,6 +185,7 @@ class RAGPipeline:
         account_id: str,
         chat_history: List[Dict[str, str]] = None,
         top_k: int = 5,
+        doc_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Executes dense retrieval with hard tenant filtering and guardrail evaluation:
@@ -196,26 +197,22 @@ class RAGPipeline:
         chat_history = chat_history or []
         rewritten_query = self.rewrite_query(query, chat_history)
 
-   # 1. Generate query embedding.
-# The rewritten query is embedded rather than the original follow-up
-# question so retrieval can operate on a complete search intent.
+        # 1. Generate query embedding for the rewritten query
         query_vec = embedding_service.get_embedding(rewritten_query)
 
-       # 1. Generate query embedding.
-# The rewritten query is embedded rather than the original follow-up
-# question so retrieval can operate on a complete search intent.
+        # 2. Retrieve top-k candidates scoped strictly to the current account
+        safe_top_k = max(1, int(top_k)) if top_k else 5
         candidates = vector_store.search(
             query_vector=query_vec,
             account_id=account_id,
-            top_k=top_k,
+            top_k=safe_top_k,
             include_discontinued=False,
+            doc_type=doc_type,
         )
 
         top_score = candidates[0]["score"] if candidates else 0.0
 
-        # 2. Retrieve candidates scoped to the current account.
-# Tenant filtering is delegated to the vector store so that retrieval
-# cannot accidentally mix documents between accounts.
+        # 3. Confidence guardrail gate: prune low confidence or ungrounded queries
         if not candidates or top_score < self.threshold:
             return {
                 "decision": "REFUSAL",
@@ -289,5 +286,25 @@ class RAGPipeline:
 
         return self.system_prompt_template, user_prompt
 
+    def semantic_search(
+        self,
+        query: str,
+        account_id: str,
+        top_k: int = 5,
+        include_discontinued: bool = False,
+        min_score: Optional[float] = None,
+        doc_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Direct semantic search helper through RAG pipeline."""
+        return vector_store.semantic_search(
+            query_text=query,
+            account_id=account_id,
+            top_k=max(1, int(top_k)) if top_k else 5,
+            include_discontinued=include_discontinued,
+            min_score=min_score,
+            doc_type=doc_type,
+        )
+
 
 rag_pipeline = RAGPipeline()
+

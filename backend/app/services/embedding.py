@@ -75,4 +75,4 @@ class EmbeddingService:
 
         return [_deterministic_mock_embedding(t) for t in texts]
 
-embedding_service = EmbeddingService()
+embedding_service = EmbeddingService()

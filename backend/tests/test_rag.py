@@ -146,11 +146,14 @@ class TestQueryRewriting:
         Only the recent window should be used.
         """
         mgr = conversation_history_manager
-        # Build a history longer than max_turns
         history = [
-            {"role": "user", "content": f"Old topic {i}"},
-            {"role": "assistant", "content": f"Old answer {i}"},
-        ] * 10  # 20 messages total
+            msg
+            for i in range(10)
+            for msg in (
+                {"role": "user", "content": f"Old topic {i}"},
+                {"role": "assistant", "content": f"Old answer {i}"},
+            )
+        ]  # 20 messages total
         trimmed = mgr.trim(history)
         assert len(trimmed) == mgr.max_turns
 
