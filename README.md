@@ -107,7 +107,9 @@ In internal audits:
 │   │   │   └── rag.py              # Retrieval, thresholding & LLM runtime
 │   │   └── main.py                 # FastAPI application root
 │   ├── tests/
+│   │   ├── conftest.py             # Shared test fixtures & isolated DB setup
 │   │   ├── test_auth.py            # Authentication & RBAC tests
+│   │   ├── test_ingestion.py       # Clause chunking & document ingestion tests
 │   │   └── test_rag.py             # RAG, isolation, and refusal tests
 │   ├── requirements.txt
 │   └── .env.example
@@ -120,11 +122,12 @@ In internal audits:
 │   │   │   ├── documents/page.tsx  # Document management view
 │   │   │   └── audit/page.tsx      # Compliance officer audit view
 │   │   ├── components/
-│   │   │   ├── ChatInterface.tsx   # Real-time token streaming chat
-│   │   │   ├── CitationDrawer.tsx  # Slide-out clause preview drawer
-│   │   │   └── DocumentUpload.tsx  # Multi-file batch uploader
+│   │   │   ├── CitationBadge.tsx       # Inline citation marker with preview trigger
+│   │   │   ├── CitationDrawer.tsx      # Slide-out clause preview drawer
+│   │   │   ├── DocumentUploadModal.tsx # Drag-and-drop document uploader with metadata
+│   │   │   └── Navbar.tsx              # Role-aware navigation header
 │   │   └── lib/
-│   │       └── api.ts              # Fetch client with SSE parser
+│   │       └── api.ts              # Fetch client with SSE stream parser
 │   ├── package.json
 │   └── tsconfig.json
 ├── docs/
