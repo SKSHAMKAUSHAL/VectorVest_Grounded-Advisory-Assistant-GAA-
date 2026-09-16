@@ -96,7 +96,9 @@ class RAGPipeline:
 # question so retrieval can operate on a complete search intent.
         query_vec = embedding_service.get_embedding(rewritten_query)
 
-        # 2. Retrieve candidates scoped to account
+       # 1. Generate query embedding.
+# The rewritten query is embedded rather than the original follow-up
+# question so retrieval can operate on a complete search intent.
         candidates = vector_store.search(
             query_vector=query_vec,
             account_id=account_id,
@@ -106,7 +108,9 @@ class RAGPipeline:
 
         top_score = candidates[0]["score"] if candidates else 0.0
 
-        # 3. Confidence Guardrail Gate
+        # 2. Retrieve candidates scoped to the current account.
+# Tenant filtering is delegated to the vector store so that retrieval
+# cannot accidentally mix documents between accounts.
         if not candidates or top_score < self.threshold:
             return {
                 "decision": "REFUSAL",
