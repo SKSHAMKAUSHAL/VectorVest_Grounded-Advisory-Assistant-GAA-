@@ -195,3 +195,39 @@ DATABASE_URL=postgresql+psycopg2://gaa_user:change-me@localhost:5432/gaa
 ```
 
 The relational database stores accounts, users, documents, and compliance audit records. Vector embeddings remain in the configured ChromaDB store, with document metadata and account identifiers used to enforce retrieval filters. Database credentials must remain in environment variables and must not be committed to the repository.
+
+---
+
+## 10. Baseline Chat View with Mock JSON Data
+
+The baseline chat view can be created independently of the backend by rendering a small set of mock JSON conversation records. This provides a stable UI for the relationship manager workflow while authentication, document retrieval, streaming responses, and audit persistence are connected.
+
+Mock messages should represent the core chat states:
+
+- **User messages:** The question submitted by the relationship manager
+- **Assistant messages:** A grounded answer or the deterministic refusal response
+- **Citations:** Document name, version, clause ID, page number, and supporting excerpt
+- **Conversation metadata:** Message ID, role, timestamp, loading state, and refusal flag
+
+An example mock response shape is:
+
+```json
+{
+   "id": "msg-002",
+   "role": "assistant",
+   "content": "The applicable tax treatment is described in the current circular.",
+   "created_at": "2026-09-16T10:30:00Z",
+   "is_refusal": false,
+   "citations": [
+      {
+         "document_name": "Tax Rule Circular 2026-04",
+         "version": "v1.0",
+         "clause_id": "Section 3.2",
+         "page_number": 4,
+         "excerpt": "Approved guidance for the applicable tax treatment."
+      }
+   ]
+}
+```
+
+The baseline view should support message history, a question input, submit/loading feedback, citation badges, and a citation drawer for source excerpts. Mock data is intended only for layout and interaction development; production responses must come from the authenticated chat API and must preserve tenant filtering, confidence thresholds, refusal handling, and mandatory citations.
