@@ -231,3 +231,9 @@ An example mock response shape is:
 ```
 
 The baseline view should support message history, a question input, submit/loading feedback, citation badges, and a citation drawer for source excerpts. Mock data is intended only for layout and interaction development; production responses must come from the authenticated chat API and must preserve tenant filtering, confidence thresholds, refusal handling, and mandatory citations.
+
+---
+
+## 11. SSE Consumer for Real-Time Streaming
+
+The chat view consumes the backend chat endpoint as a Server-Sent Events (SSE) stream. The client opens one `EventSource` per question, appends each incoming `data:` token chunk to the in-progress assistant message, and closes the connection on the terminal `[DONE]` event. If the stream drops or the terminal event never arrives, the UI marks the message as incomplete and lets the RM retry the same question. Citation badges and the deterministic refusal message are rendered only after the terminal event, so partial tokens never produce unverified claims.
