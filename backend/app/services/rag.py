@@ -31,9 +31,97 @@ REFUSAL_MESSAGE = (
     "uploaded documentation. Please escalate this request to the Compliance and Legal Department."
 )
 
+# Pronoun / deixis patterns that indicate a follow-up needs context injection
+_REFERENTIAL_TOKENS = frozenset([
+    "it", "its", "they", "them", "their", "this", "that", "these", "those",
+    "such", "same", "above", "said", "mentioned", "what about", "and for",
+    "also for", "how about", "what if", "but what", "nri", "non-resident",
+])
+
+
+class ConversationHistoryManager:
+    """
+    Manages stateful, rolling conversation history for multi-turn RAG sessions.
+
+    Responsibilities:
+    - Stores and trims conversation turns to a configurable window.
+    - Detects whether an incoming query is referential (needs context injection).
+    - Extracts the dominant entity / topic from recent turns for enriched reformulation.
+    - Compresses long conversation histories to avoid exceeding LLM context limits.
+    """
+
+    def __init__(self, max_turns: int = 6, max_chars_per_message: int = 400):
+        """
+        Args:
+            max_turns: Maximum number of individual messages (user + assistant)
+                       retained in the active window.  Older messages are dropped.
+            max_chars_per_message: Characters to which each message is truncated
+                                   when building the history string for the LLM.
+        """
+        self.max_turns = max_turns
+        self.max_chars_per_message = max_chars_per_message
+
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
+
+    def trim(self, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Return at most *max_turns* most recent messages."""
+        return history[-self.max_turns:]
+
+    def is_referential(self, query: str) -> bool:
+        """
+        Returns True when the query contains pronouns or short contextual phrases
+        that indicate it cannot stand alone without the conversation history.
+
+        Examples that return True:
+            - "What about for NRIs?"
+            - "Does it apply to them too?"
+            - "And for joint accounts?"
+        """
+        lower = query.lower().strip()
+        tokens = set(lower.split())
+        # Direct token overlap with referential set
+        if tokens & _REFERENTIAL_TOKENS:
+            return True
+        # Short queries almost always need context
+        if len(lower.split()) <= 5:
+            return True
+        return False
+
+    def build_history_string(self, history: List[Dict[str, str]]) -> str:
+        """
+        Converts the message list into a compact string for the LLM reformulator prompt.
+        Each message is truncated to *max_chars_per_message* to avoid context bloat.
+        """
+        lines: List[str] = []
+        for msg in self.trim(history):
+            role = msg.get("role", "user").capitalize()
+            content = msg.get("content", "")
+            if len(content) > self.max_chars_per_message:
+                content = content[: self.max_chars_per_message].rstrip() + "..."
+            lines.append(f"{role}: {content}")
+        return "\n".join(lines)
+
+    def extract_last_topic(self, history: List[Dict[str, str]]) -> str:
+        """
+        Returns the last user query from history as a topic hint,
+        used to enrich short follow-up queries even before calling the LLM.
+        """
+        for msg in reversed(self.trim(history)):
+            if msg.get("role") == "user":
+                return msg.get("content", "").strip()
+        return ""
+
+
+# Module-level singleton
+conversation_history_manager = ConversationHistoryManager()
+
+
 class RAGPipeline:
     def __init__(self):
         self.threshold = settings.SIMILARITY_THRESHOLD
+        self.history_manager = conversation_history_manager
         self._load_system_prompt()
 
     def _load_system_prompt(self):
@@ -52,27 +140,44 @@ class RAGPipeline:
 
     def rewrite_query(self, query: str, chat_history: List[Dict[str, str]]) -> str:
         """
-        Reformulates conversational follow-up questions (e.g. 'What about for NRIs?')
-        into standalone queries.
+        Reformulates conversational follow-up questions into standalone search queries.
+
+        Strategy:
+        1. If *chat_history* is empty, the query is already standalone — return as-is.
+        2. If the query is NOT referential (contains no pronouns / context pointers),
+           return it directly to avoid unnecessary LLM calls.
+        3. Otherwise, build a compact history string and call the LLM reformulator.
+           On LLM failure or empty response, fall back to topic-enriched original query.
         """
         if not chat_history:
             return query.strip()
 
-        history_lines = []
-        for msg in chat_history[-6:]: # Keep last 3 turns
-            role = msg.get("role", "user").capitalize()
-            content = msg.get("content", "")
-            history_lines.append(f"{role}: {content}")
+        # Fast path: non-referential, self-contained queries skip reformulation
+        if not self.history_manager.is_referential(query):
+            return query.strip()
 
-        history_str = "\n".join(history_lines)
-        user_prompt = f"Conversation History:\n{history_str}\n\nFollow-up Question: {query}\n\nRewritten Query:"
-        
+        history_str = self.history_manager.build_history_string(chat_history)
+        user_prompt = (
+            f"Conversation History:\n{history_str}\n\n"
+            f"Follow-up Question: {query}\n\n"
+            "Rewritten Query:"
+        )
+
         rewritten = llm_service.generate(
             system_prompt=REWRITE_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             temperature=0.0,
         )
-        return rewritten.strip() if rewritten else query.strip()
+        result = rewritten.strip() if rewritten else ""
+
+        # Safety guard: if LLM returns empty or mirrors the original, add topic context
+        if not result or result.lower() == query.lower():
+            last_topic = self.history_manager.extract_last_topic(chat_history)
+            if last_topic:
+                return f"{last_topic} — {query.strip()}"
+            return query.strip()
+
+        return result
 
     def retrieve_and_evaluate(
         self,
@@ -83,7 +188,7 @@ class RAGPipeline:
     ) -> Dict[str, Any]:
         """
         Executes dense retrieval with hard tenant filtering and guardrail evaluation:
-        1. Multi-turn query rewriting.
+        1. Multi-turn query rewriting (with referential detection).
         2. Vector search partitioned by account_id and excluding discontinued products.
         3. Threshold confidence check (>= 0.68).
         4. Structured citation assembly.
@@ -183,5 +288,6 @@ class RAGPipeline:
         )
 
         return self.system_prompt_template, user_prompt
+
 
 rag_pipeline = RAGPipeline()
