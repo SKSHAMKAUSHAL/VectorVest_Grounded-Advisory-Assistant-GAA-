@@ -169,3 +169,5 @@ Schema validation step in ingestion pipeline; change notifications to Data Platf
 [x] Risks documented with likelihood, impact, and mitigation (including RAG-specific risks: hallucination, stale grounding, citation gaps)
 [x] Free of aspirational, unmeasurable language
 [ ] Stakeholder alignment review — pending sign-off from CCO and Head of Wealth Management
+
+Everything should be review
