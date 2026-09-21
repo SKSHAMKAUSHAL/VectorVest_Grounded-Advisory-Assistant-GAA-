@@ -232,6 +232,11 @@ An example mock response shape is:
 
 The baseline view should support message history, a question input, submit/loading feedback, citation badges, and a citation drawer for source excerpts. Mock data is intended only for layout and interaction development; production responses must come from the authenticated chat API and must preserve tenant filtering, confidence thresholds, refusal handling, and mandatory citations.
 
+The ChatView is connected to the authenticated backend chat endpoint at `POST /api/v1/chat/query`.
+It sends the current question and prior conversation history, then renders streamed assistant tokens in real time.
+The endpoint runs tenant-scoped RAG retrieval and returns citation metadata or the approved refusal response.
+Completed requests are written to the compliance audit log, while `/api/v1/chat/query/sync` supports structured non-streaming responses.
+
 ---
 
 ## 11. SSE Consumer for Real-Time Streaming
