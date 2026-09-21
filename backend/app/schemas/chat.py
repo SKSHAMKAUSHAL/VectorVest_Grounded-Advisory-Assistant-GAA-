@@ -21,6 +21,28 @@ class CitationItem(BaseModel):
     excerpt: str
     score: Optional[float] = 0.0
 
+class SSETokenData(BaseModel):
+    token: str
+
+class SSEErrorData(BaseModel):
+    error: str
+
+class SSETokenEvent(BaseModel):
+    event: str = "token"
+    data: SSETokenData
+
+class SSECitationsEvent(BaseModel):
+    event: str = "citations"
+    data: List[CitationItem]
+
+class SSEDoneEvent(BaseModel):
+    event: str = "done"
+    data: str = "[DONE]"
+
+class SSEErrorEvent(BaseModel):
+    event: str = "error"
+    data: SSEErrorData
+
 class ChatQueryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

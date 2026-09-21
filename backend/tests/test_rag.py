@@ -1,3 +1,4 @@
+import json
 import pytest
 from fastapi.testclient import TestClient
 from app.services.rag import rag_pipeline, REFUSAL_MESSAGE, conversation_history_manager
@@ -324,3 +325,209 @@ def test_compliance_audit_logging_and_rbac(client: TestClient):
     assert first_log["query"] == "Auditable test inquiry for compliance log verification"
     assert first_log["account_id"] == "branch_12_central"
     assert first_log["latency_ms"] >= 0
+
+
+# ---------------------------------------------------------------------------
+# Comprehensive FastAPI SSE Streaming & Citation Block Tests
+# ---------------------------------------------------------------------------
+
+class TestFastAPIStreamingSSEAndCitations:
+    """Comprehensive test suite for FastAPI SSE streaming and citation block delivery."""
+
+    @staticmethod
+    def _parse_sse(raw_text: str):
+        events = []
+        for block in raw_text.strip().split("\n\n"):
+            if not block.strip():
+                continue
+            ev = {"event": None, "data": None}
+            for line in block.split("\n"):
+                if line.startswith("event:"):
+                    ev["event"] = line.replace("event:", "").strip()
+                elif line.startswith("data:"):
+                    ev["data"] = line.replace("data:", "").strip()
+            events.append(ev)
+        return events
+
+    def test_sse_grounded_answer_with_citations_and_audit(self, client: TestClient):
+        """Verifies grounded token streaming, citation block payload, headers, and audit persistence."""
+        token = get_auth_token(client, "rm_test@wealth.bank.com", "TestPassword123!")
+        admin_token = get_auth_token(client, "comp_test@wealth.bank.com", "AdminPassword123!")
+
+        # 1. Upload approved policy document
+        doc_text = b"""
+        Section 5.3.1 Sovereign Green Bonds Tax Framework
+        Investment in designated sovereign green bonds is exempt from capital gains tax
+        under schedule 7 for all eligible resident portfolio accounts.
+        """
+        upload_res = client.post(
+            "/api/v1/documents/upload",
+            headers={"Authorization": f"Bearer {token}"},
+            files={"file": ("Green_Bonds_Policy_2024.txt", doc_text, "text/plain")},
+            data={
+                "doc_type": "policy_manual",
+                "version": "v3.0",
+                "effective_date": "2024-03-01",
+                "is_discontinued": "false",
+            },
+        )
+        assert upload_res.status_code == 201
+
+        # 2. Stream query
+        response = client.post(
+            "/api/v1/chat/query",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"query": "Sovereign green bonds capital gains tax schedule 7"},
+        )
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers["content-type"]
+        assert response.headers.get("cache-control") == "no-cache"
+
+        events = self._parse_sse(response.text)
+        token_events = [e for e in events if e["event"] == "token"]
+        citation_events = [e for e in events if e["event"] == "citations"]
+        done_events = [e for e in events if e["event"] == "done"]
+
+        # Tokens streamed
+        assert len(token_events) > 0
+        streamed_tokens = []
+        for te in token_events:
+            parsed = json.loads(te["data"])
+            assert "token" in parsed
+            streamed_tokens.append(parsed["token"])
+        full_text = "".join(streamed_tokens)
+        assert len(full_text) > 0
+
+        # Structured citation block
+        assert len(citation_events) == 1
+        citations_data = json.loads(citation_events[0]["data"])
+        assert isinstance(citations_data, list)
+        assert len(citations_data) >= 1
+        citation = citations_data[0]
+        assert citation["document_name"] == "Green_Bonds_Policy_2024.txt"
+        assert citation["version"] == "v3.0"
+        assert "Section 5.3.1" in citation["clause_id"]
+        assert citation["score"] >= 0.68
+        assert len(citation["excerpt"]) > 0
+
+        # Terminal event
+        assert len(done_events) == 1
+        assert done_events[0]["data"] == "[DONE]"
+
+        # Compliance audit log persisted
+        audit_res = client.get("/api/v1/audit/logs", headers={"Authorization": f"Bearer {admin_token}"})
+        assert audit_res.status_code == 200
+        logs = audit_res.json()["logs"]
+        matching_logs = [l for l in logs if "green bonds" in l["query"].lower()]
+        assert len(matching_logs) >= 1
+        assert matching_logs[0]["is_refusal"] is False
+        assert matching_logs[0]["similarity_score"] >= 0.68
+
+    def test_sse_streaming_unauthorized(self, client: TestClient):
+        """Verifies 401 Unauthorized when no auth token is provided."""
+        response = client.post(
+            "/api/v1/chat/query",
+            json={"query": "Unauthorized test query"},
+        )
+        assert response.status_code == 401
+
+    def test_sse_streaming_tenant_isolation(self, client: TestClient):
+        """Verifies Tenant B receives refusal tokens and empty citations when querying Tenant A's documents."""
+        token_central = get_auth_token(client, "rm_test@wealth.bank.com", "TestPassword123!")
+        token_north = get_auth_token(client, "north_rm@wealth.bank.com", "NorthPassword123!")
+
+        # North uploads proprietary directive
+        client.post(
+            "/api/v1/documents/upload",
+            headers={"Authorization": f"Bearer {token_north}"},
+            files={"file": ("North_Confidential_Rule.txt", b"Clause 77.1 North Regional Exclusive Protocol", "text/plain")},
+            data={"doc_type": "policy_manual", "version": "v1.0", "effective_date": "2024-01-01"},
+        )
+
+        # Central RM queries for North rule via SSE stream -> Must emit refusal and empty citations!
+        response = client.post(
+            "/api/v1/chat/query",
+            headers={"Authorization": f"Bearer {token_central}"},
+            json={"query": "North Regional Exclusive Protocol Clause 77.1"},
+        )
+        assert response.status_code == 200
+        events = self._parse_sse(response.text)
+        citation_events = [e for e in events if e["event"] == "citations"]
+        assert len(citation_events) == 1
+        assert json.loads(citation_events[0]["data"]) == []
+
+        token_events = [e for e in events if e["event"] == "token"]
+        assert any(REFUSAL_MESSAGE in json.loads(te["data"])["token"] for te in token_events)
+
+    def test_sse_streaming_with_chat_history(self, client: TestClient):
+        """Verifies multi-turn chat history is processed during SSE streaming."""
+        token = get_auth_token(client, "rm_test@wealth.bank.com", "TestPassword123!")
+
+        history = [
+            {"role": "user", "content": "What is the capital gains tax on municipal bonds?"},
+            {"role": "assistant", "content": "The tax rate is 10% for domestic resident accounts."},
+        ]
+        response = client.post(
+            "/api/v1/chat/query",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "query": "What about for NRIs?",
+                "chat_history": history,
+            },
+        )
+        assert response.status_code == 200
+        events = self._parse_sse(response.text)
+        done_events = [e for e in events if e["event"] == "done"]
+        assert len(done_events) == 1
+        assert done_events[0]["data"] == "[DONE]"
+
+    def test_sse_streaming_error_resilience(self, client: TestClient):
+        """Verifies that unexpected generation errors emit event: error and persist audit trail."""
+        token = get_auth_token(client, "rm_test@wealth.bank.com", "TestPassword123!")
+        import app.api.v1.chat as chat_module
+
+        # 1. Upload approved policy document so retrieval enters generation path
+        doc_text = b"""
+        Section 5.3.1 Sovereign Green Bonds Tax Framework
+        Investment in designated sovereign green bonds is exempt from capital gains tax
+        under schedule 7 for all eligible resident portfolio accounts.
+        """
+        upload_res = client.post(
+            "/api/v1/documents/upload",
+            headers={"Authorization": f"Bearer {token}"},
+            files={"file": ("Green_Bonds_Policy_Err.txt", doc_text, "text/plain")},
+            data={
+                "doc_type": "policy_manual",
+                "version": "v3.0",
+                "effective_date": "2024-03-01",
+                "is_discontinued": "false",
+            },
+        )
+        assert upload_res.status_code == 201
+
+        # 2. Mock stream_generate to raise RuntimeError
+        async def mock_failing_stream(*args, **kwargs):
+            raise RuntimeError("Simulated LLM network timeout")
+            yield "never"
+
+        original_stream = chat_module.llm_service.stream_generate
+        try:
+            chat_module.llm_service.stream_generate = mock_failing_stream
+            response = client.post(
+                "/api/v1/chat/query",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"query": "Sovereign green bonds capital gains tax schedule 7"},
+            )
+            assert response.status_code == 200
+            events = self._parse_sse(response.text)
+            error_events = [e for e in events if e["event"] == "error"]
+            assert len(error_events) == 1
+            error_data = json.loads(error_events[0]["data"])
+            assert "Simulated LLM network timeout" in error_data["error"]
+
+            done_events = [e for e in events if e["event"] == "done"]
+            assert len(done_events) == 1
+            assert done_events[0]["data"] == "[DONE]"
+        finally:
+            chat_module.llm_service.stream_generate = original_stream
+

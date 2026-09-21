@@ -23,6 +23,15 @@ from app.services.vector_store import vector_store
 
 router = APIRouter(prefix="/chat", tags=["Grounded Advisory Chat"])
 
+def get_db_session() -> Session:
+    """Helper to get database session, respecting FastAPI dependency overrides in tests."""
+    from app.main import app
+    override = app.dependency_overrides.get(get_db)
+    if override:
+        gen = override()
+        return next(gen)
+    return SessionLocal()
+
 def record_audit_log(
     account_id: str,
     user_id: str,
@@ -35,7 +44,7 @@ def record_audit_log(
     latency_ms: int,
 ):
     """Writes compliance audit record to relational database."""
-    db: Session = SessionLocal()
+    db: Session = get_db_session()
     try:
         log_entry = ComplianceAuditLog(
             account_id=account_id,
@@ -102,36 +111,62 @@ async def chat_query_stream(
             return
 
         # Generation Path
-        system_prompt, user_prompt = rag_pipeline.build_generation_prompts(
-            query=request.query,
-            rewritten_query=eval_result["rewritten_query"],
-            context=eval_result["context"],
-            chat_history=history,
-        )
+        try:
+            system_prompt, user_prompt = rag_pipeline.build_generation_prompts(
+                query=request.query,
+                rewritten_query=eval_result["rewritten_query"],
+                context=eval_result["context"],
+                chat_history=history,
+            )
 
-        async for token in llm_service.stream_generate(system_prompt, user_prompt):
-            accumulated_text.append(token)
-            yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
+            async for token in llm_service.stream_generate(system_prompt, user_prompt):
+                accumulated_text.append(token)
+                yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
 
-        # Emit citations event
-        yield f"event: citations\ndata: {json.dumps(eval_result['citations'])}\n\n"
-        yield "event: done\ndata: [DONE]\n\n"
+            # Emit citations event
+            yield f"event: citations\ndata: {json.dumps(eval_result['citations'])}\n\n"
+            yield "event: done\ndata: [DONE]\n\n"
 
-        latency = int((time.time() - start_time) * 1000)
-        full_response = "".join(accumulated_text)
-        record_audit_log(
-            account_id=current_user.account_id,
-            user_id=current_user.id,
-            query=request.query,
-            rewritten_query=eval_result["rewritten_query"],
-            chunk_ids=eval_result["retrieved_chunk_ids"],
-            score=eval_result["top_score"],
-            response_text=full_response,
-            is_refusal=False,
-            latency_ms=latency,
-        )
+            latency = int((time.time() - start_time) * 1000)
+            full_response = "".join(accumulated_text)
+            record_audit_log(
+                account_id=current_user.account_id,
+                user_id=current_user.id,
+                query=request.query,
+                rewritten_query=eval_result["rewritten_query"],
+                chunk_ids=eval_result["retrieved_chunk_ids"],
+                score=eval_result["top_score"],
+                response_text=full_response,
+                is_refusal=False,
+                latency_ms=latency,
+            )
+        except Exception as e:
+            error_msg = str(e)
+            yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
+            yield "event: done\ndata: [DONE]\n\n"
+            latency = int((time.time() - start_time) * 1000)
+            record_audit_log(
+                account_id=current_user.account_id,
+                user_id=current_user.id,
+                query=request.query,
+                rewritten_query=eval_result.get("rewritten_query", request.query),
+                chunk_ids=eval_result.get("retrieved_chunk_ids", []),
+                score=eval_result.get("top_score", 0.0),
+                response_text=f"Stream error: {error_msg}",
+                is_refusal=True,
+                latency_ms=latency,
+            )
 
-    return StreamingResponse(sse_event_stream(), media_type="text/event-stream")
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(
+        sse_event_stream(),
+        media_type="text/event-stream",
+        headers=headers,
+    )
 
 @router.post("/query/sync", response_model=ChatQueryResponse)
 def chat_query_sync(
