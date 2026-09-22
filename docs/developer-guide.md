@@ -446,16 +446,20 @@ Current test files include:
 test_auth.py
 test_ingestion.py
 test_rag.py
+test_semantic_search.py
+test_latency_and_grounding.py
 ```
 
 ### Test Responsibilities
 
-| Test                | Main Area                 |
-| ------------------- | ------------------------- |
-| `test_auth.py`      | Authentication behavior   |
-| `test_ingestion.py` | Document ingestion        |
-| `test_rag.py`       | RAG functionality         |
-| `conftest.py`       | Shared test configuration |
+| Test                            | Main Area                                         |
+| ------------------------------- | ------------------------------------------------- |
+| `test_auth.py`                  | Authentication behavior                           |
+| `test_ingestion.py`             | Document ingestion                                |
+| `test_rag.py`                   | RAG functionality & SSE token streaming           |
+| `test_semantic_search.py`       | Top-k semantic search & filtering                 |
+| `test_latency_and_grounding.py` | Response lookup latency & prompt grounding audits |
+| `conftest.py`                   | Shared test configuration                         |
 
 When modifying backend functionality, the relevant existing tests should be run before opening a pull request.
 
