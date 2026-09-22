@@ -110,7 +110,9 @@ This checklist outlines the complete roadmap to build, test, and deploy the Grou
   - [x] Implement `tests/test_auth.py` (login, password reset, unauthorized access, RBAC, tenant context).
   - [x] Implement `tests/test_ingestion.py` (clause chunking, PDF parsing, cumulative vector storage, discontinued filtering, tenant isolation).
   - [x] Implement `tests/test_rag.py` (query rewriting, hard refusal gate, grounded citations, SSE streaming, tenant isolation, compliance audit logging).
+  - [x] Implement `tests/test_semantic_search.py` (top-k semantic search, filtering, boundary conditions, batch search).
+  - [x] Implement `tests/test_latency_and_grounding.py` (response lookup latency SLAs, citation coverage, refusal correctness, adversarial resilience).
 - [x] **6.2 End-to-End Validation & Audit Readiness**
-  - Validate citation coverage ($\ge 98\%$).
-  - Measure response lookup latency ($\le 2\text{ min}$).
-  - Verify complete consistency across PRD, HLD, LLD, and codebase.
+  - [x] Validate citation coverage ($\ge 98\%$).
+  - [x] Measure response lookup latency ($\le 2\text{ min}$).
+  - [x] Verify complete consistency across PRD, HLD, LLD, and codebase.
