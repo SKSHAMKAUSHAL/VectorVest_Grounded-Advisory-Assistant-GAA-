@@ -242,3 +242,9 @@ Completed requests are written to the compliance audit log, while `/api/v1/chat/
 ## 11. SSE Consumer for Real-Time Streaming
 
 The chat view consumes the backend chat endpoint as a Server-Sent Events (SSE) stream. The client opens one `EventSource` per question, appends each incoming `data:` token chunk to the in-progress assistant message, and closes the connection on the terminal `[DONE]` event. If the stream drops or the terminal event never arrives, the UI marks the message as incomplete and lets the RM retry the same question. Citation badges and the deterministic refusal message are rendered only after the terminal event, so partial tokens never produce unverified claims.
+
+---
+
+## 12. Inline Citation Markers & Hover Tooltips
+
+Assistant answers embed inline `[Doc: <name>, Clause: <id>]` markers that `renderFormattedMessage()` in `frontend/src/app/page.tsx` parses into clickable gold `CitationBadge` pills (`frontend/src/components/CitationBadge.tsx`). Hovering a badge shows an instant tooltip preview (`title="Click to view verified clause excerpt..."`) with document and clause context, while clicking opens the `CitationDrawer` slide-out with version, page reference, exact excerpt, and grounding-confidence score for one-click compliance verification.
