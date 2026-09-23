@@ -144,6 +144,22 @@ class IngestionPipeline:
             embeddings = embedding_service.get_embeddings(chunk_texts)
 
             # 4. Upsert into ChromaDB
+            is_this_doc_superseded = False
+            if superseded_by:
+                # Check if superseded_by matches an existing document in this account that is being superseded
+                prior_doc = db.query(Document).filter(
+                    Document.id == superseded_by,
+                    Document.account_id == account_id
+                ).first()
+                if prior_doc:
+                    # The prior document is now superseded by the newly uploaded document
+                    prior_doc.superseded_by = doc_record.id
+                    db.commit()
+                    vector_store.mark_document_as_superseded(prior_doc.id)
+                else:
+                    # Otherwise, this document itself is flagged as superseded by the referenced ID
+                    is_this_doc_superseded = True
+
             vector_store.add_chunks(
                 account_id=account_id,
                 document_id=doc_record.id,
@@ -154,6 +170,7 @@ class IngestionPipeline:
                 is_discontinued=is_discontinued,
                 chunks=chunks,
                 embeddings=embeddings,
+                is_superseded=is_this_doc_superseded,
             )
 
             # 5. Finalize DB record

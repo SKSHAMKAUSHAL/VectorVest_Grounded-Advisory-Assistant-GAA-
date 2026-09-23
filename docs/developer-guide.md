@@ -448,6 +448,7 @@ test_ingestion.py
 test_rag.py
 test_semantic_search.py
 test_latency_and_grounding.py
+test_reranker.py
 ```
 
 ### Test Responsibilities
@@ -459,6 +460,7 @@ test_latency_and_grounding.py
 | `test_rag.py`                   | RAG functionality & SSE token streaming           |
 | `test_semantic_search.py`       | Top-k semantic search & filtering                 |
 | `test_latency_and_grounding.py` | Response lookup latency & prompt grounding audits |
+| `test_reranker.py`              | Cross-encoder re-ranking & supersession filtering |
 | `conftest.py`                   | Shared test configuration                         |
 
 When modifying backend functionality, the relevant existing tests should be run before opening a pull request.
