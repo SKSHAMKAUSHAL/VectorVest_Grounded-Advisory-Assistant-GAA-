@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.services.embedding import embedding_service
 from app.services.vector_store import vector_store
 from app.services.llm import llm_service
+from app.services.reranker import reranker
 
 REWRITE_SYSTEM_PROMPT = """You are a search query reformulator.
 Given the conversation history and a follow-up question, rewrite the follow-up question into an independent, fully qualified search query.
@@ -200,19 +201,28 @@ class RAGPipeline:
         # 1. Generate query embedding for the rewritten query
         query_vec = embedding_service.get_embedding(rewritten_query)
 
-        # 2. Retrieve top-k candidates scoped strictly to the current account
+        # 2. Retrieve top candidate pool scoped strictly to the current account (excluding discontinued & superseded)
         safe_top_k = max(1, int(top_k)) if top_k else 5
-        candidates = vector_store.search(
+        retrieval_pool_k = max(safe_top_k * 3, 15)
+        raw_candidates = vector_store.search(
             query_vector=query_vec,
             account_id=account_id,
-            top_k=safe_top_k,
+            top_k=retrieval_pool_k,
             include_discontinued=False,
+            include_superseded=False,
             doc_type=doc_type,
+        )
+
+        # 3. Cross-encoder re-ranking to isolate the most relevant context clauses
+        candidates = reranker.rerank(
+            query=rewritten_query,
+            candidates=raw_candidates,
+            top_n=safe_top_k,
         )
 
         top_score = candidates[0]["score"] if candidates else 0.0
 
-        # 3. Confidence guardrail gate: prune low confidence or ungrounded queries
+        # 4. Confidence guardrail gate: prune low confidence or ungrounded queries
         if not candidates or top_score < self.threshold:
             return {
                 "decision": "REFUSAL",

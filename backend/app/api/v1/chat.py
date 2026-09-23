@@ -204,20 +204,24 @@ def chat_query_sync(
 
     latency = int((time.time() - start_time) * 1000)
 
-    # Persist audit record
-    log_entry = ComplianceAuditLog(
-        account_id=current_user.account_id,
-        user_id=current_user.id,
-        query=request.query,
-        rewritten_query=eval_result["rewritten_query"],
-        retrieved_chunk_ids=eval_result["retrieved_chunk_ids"],
-        similarity_score=eval_result["top_score"],
-        response=response_text,
-        is_refusal=is_refusal,
-        latency_ms=latency,
-    )
-    db.add(log_entry)
-    db.commit()
+    # Persist audit record safely
+    try:
+        log_entry = ComplianceAuditLog(
+            account_id=current_user.account_id,
+            user_id=current_user.id,
+            query=request.query,
+            rewritten_query=eval_result["rewritten_query"],
+            retrieved_chunk_ids=eval_result["retrieved_chunk_ids"],
+            similarity_score=eval_result["top_score"],
+            response=response_text,
+            is_refusal=is_refusal,
+            latency_ms=latency,
+        )
+        db.add(log_entry)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error persisting synchronous audit log: {e}")
 
     return ChatQueryResponse(
         answer=response_text,

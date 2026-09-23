@@ -34,6 +34,7 @@ class VectorStore:
         is_discontinued: bool,
         chunks: List[Dict[str, Any]],
         embeddings: List[List[float]],
+        is_superseded: bool = False,
     ) -> int:
         """
         Ingests and persists clause chunks into ChromaDB under the account's partition.
@@ -61,6 +62,7 @@ class VectorStore:
                 "page_number": int(chunk.get("page_number", 1)),
                 "chunk_index": int(chunk.get("chunk_index", i)),
                 "is_discontinued": bool(is_discontinued),
+                "is_superseded": bool(is_superseded),
                 "effective_date": str(effective_date),
             })
 
@@ -81,6 +83,7 @@ class VectorStore:
         min_score: Optional[float] = None,
         doc_type: Optional[str] = None,
         document_id: Optional[str] = None,
+        include_superseded: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Performs tenant-isolated vector retrieval with configurable top-k limit.
@@ -88,8 +91,9 @@ class VectorStore:
         Hard filters ensure:
         1. Query chunks belong EXCLUSIVELY to `account_id`.
         2. Discontinued products are excluded unless explicitly requested.
-        3. Optional metadata filters (doc_type, document_id) are strictly respected.
-        4. Optional similarity threshold (min_score) prunes low-confidence candidates.
+        3. Superseded circulars/policies are excluded unless explicitly requested.
+        4. Optional metadata filters (doc_type, document_id) are strictly respected.
+        5. Optional similarity threshold (min_score) prunes low-confidence candidates.
 
         Returns candidate list sorted descending by similarity score, capped at top_k.
         """
@@ -108,6 +112,8 @@ class VectorStore:
         conditions: List[Dict[str, Any]] = [{"account_id": str(account_id)}]
         if not include_discontinued:
             conditions.append({"is_discontinued": False})
+        if not include_superseded:
+            conditions.append({"is_superseded": False})
         if doc_type:
             conditions.append({"doc_type": str(doc_type)})
         if document_id:
@@ -163,11 +169,41 @@ class VectorStore:
                 "page_number": int(meta.get("page_number", 1)),
                 "doc_type": meta.get("doc_type", ""),
                 "effective_date": meta.get("effective_date", ""),
+                "is_superseded": bool(meta.get("is_superseded", False)),
             })
 
         # Sort descending by similarity score and truncate to top_k
         candidates.sort(key=lambda x: x["score"], reverse=True)
         return candidates[:top_k]
+
+    def mark_document_as_superseded(self, document_id: str) -> int:
+        """
+        Marks all chunks belonging to document_id as superseded in ChromaDB.
+        Excludes these chunks from subsequent runtime advisory retrieval.
+        """
+        try:
+            results = self.collection.get(
+                where={"document_id": str(document_id)},
+                include=["metadatas"]
+            )
+            if not results or not results["ids"]:
+                return 0
+
+            ids = results["ids"]
+            metas = results["metadatas"]
+            updated_metas = []
+            for m in metas:
+                m_copy = dict(m)
+                m_copy["is_superseded"] = True
+                updated_metas.append(m_copy)
+
+            self.collection.update(
+                ids=ids,
+                metadatas=updated_metas,
+            )
+            return len(ids)
+        except Exception:
+            return 0
 
     def semantic_search(
         self,
@@ -178,6 +214,7 @@ class VectorStore:
         min_score: Optional[float] = None,
         doc_type: Optional[str] = None,
         document_id: Optional[str] = None,
+        include_superseded: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         High-level natural language semantic search.
@@ -195,6 +232,7 @@ class VectorStore:
             min_score=min_score,
             doc_type=doc_type,
             document_id=document_id,
+            include_superseded=include_superseded,
         )
 
     def batch_semantic_search(
@@ -205,6 +243,7 @@ class VectorStore:
         include_discontinued: bool = False,
         min_score: Optional[float] = None,
         doc_type: Optional[str] = None,
+        include_superseded: bool = False,
     ) -> List[List[Dict[str, Any]]]:
         """
         Executes batch semantic search for a collection of queries.
@@ -233,6 +272,7 @@ class VectorStore:
                         include_discontinued=include_discontinued,
                         min_score=min_score,
                         doc_type=doc_type,
+                        include_superseded=include_superseded,
                     )
                 )
         return results
