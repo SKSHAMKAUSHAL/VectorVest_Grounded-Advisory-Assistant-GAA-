@@ -263,17 +263,3 @@ To meet the stringent accuracy demands of wealth management and compliance advis
    - Strict confidence preservation: boosts relevant clauses without lowering semantic score below the deterministic $\ge 0.68$ gate.
    - Truncates context to the top $k=3\text{--}5$ highest-fidelity clauses.
 
-### 13.2 Automated Document Supersession Filtering
-In financial advisory, advising clients based on outdated tax rules or superseded product circulars creates severe regulatory liability.
-- Documents uploaded with a `superseded_by` pointer (or when a new circular supersedes an older one) flag the target document as `is_superseded = True`.
-- Both the relational database model and vector store (`ChromaDBVectorStore`) strictly filter out superseded and discontinued documents from retrieval (`include_superseded: bool = False`).
-- Unit and integration tests verify that RMs querying tax regulations receive exclusively the active version, even when older documents share semantic terminology.
-
-### 13.3 Benchmark Evaluation Report & Quality Auditing
-GAA includes a reproducible benchmark compiler script (`backend/scripts/compile_benchmark_report.py`) that audits retrieval performance, SLA latencies, and grounding coverage against production requirements:
-- **Comprehensive Benchmark Report:** Located at [docs/benchmark-report.md](docs/benchmark-report.md).
-- **Embedded SVG Visualizations:** Renders high-resolution vector charts for:
-  - Latency distribution percentiles ($p50 = 340\text{ ms}$, $p95 = 1,120\text{ ms}$, $p99 = 1,840\text{ ms}$ vs. the $120\text{ s}$ SLA).
-  - Grounding KPI audit scores (100% citation coverage, 100% refusal correctness, 100% zero-hallucination rate).
-- **Test Suite Verification:** 76 automated unit and integration tests across 6 test modules passing with 0 failures.
-everything is clear
