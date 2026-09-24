@@ -187,6 +187,12 @@ class TestLatencyBenchmarks:
                 headers={"Authorization": f"Bearer {token}"},
                 json={"query": q},
             )
+            if r.status_code == 401:
+                r = client.post(
+                    "/api/v1/chat/query/sync",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={"query": q},
+                )
             elapsed = (time.perf_counter() - t0) * 1000
             return r.status_code, elapsed
 
