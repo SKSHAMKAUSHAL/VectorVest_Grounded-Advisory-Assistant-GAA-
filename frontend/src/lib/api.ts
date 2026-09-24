@@ -70,6 +70,19 @@ export async function loginUser(email: string, password: string) {
   return res.json();
 }
 
+export async function signupUser(fullName: string, email: string, password: string) {
+  const res = await fetch(`${API_BASE}/api/v1/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ full_name: fullName, email, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Registration failed" }));
+    throw new Error(err.detail || "Registration error");
+  }
+  return res.json();
+}
+
 export async function requestPasswordReset(email: string) {
   const res = await fetch(`${API_BASE}/api/v1/auth/forgot-password`, {
     method: "POST",

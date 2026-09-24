@@ -160,3 +160,36 @@ def test_multi_tenant_isolation_scopes(client: TestClient):
     assert token_central["account_id"] == "branch_12_central"
     assert token_north["account_id"] == "branch_01_north"
     assert token_central["account_id"] != token_north["account_id"]
+
+
+def test_signup_success(client: TestClient):
+    """Verifies that new advisors can successfully register and receive a JWT."""
+    res = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "full_name": "Jane Doe",
+            "email": "jane.doe@wealth.bank.com",
+            "password": "SecurePassword123!",
+        },
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert "access_token" in data
+    assert data["user"]["email"] == "jane.doe@wealth.bank.com"
+    assert data["user"]["full_name"] == "Jane Doe"
+    assert data["user"]["role"] == "RM"
+
+
+def test_signup_duplicate_email(client: TestClient):
+    """Verifies that registering with an existing email returns 400."""
+    res = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "full_name": "Duplicate RM",
+            "email": "rm_test@wealth.bank.com",
+            "password": "Password123!",
+        },
+    )
+    assert res.status_code == 400
+    assert "already exists" in res.json()["detail"].lower()
+
