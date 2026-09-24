@@ -9,6 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
+  signup: (fullName: string, email: string, pass: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -47,6 +48,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signup = async (fullName: string, email: string, pass: string) => {
+    const { signupUser } = await import("@/lib/api");
+    const data = await signupUser(fullName, email, pass);
+    if (data.access_token) {
+      localStorage.setItem("gaa_token", data.access_token);
+      setToken(data.access_token);
+      setUser(data.user);
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem("gaa_token");
     setToken(null);
@@ -62,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, loading: isLoading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, loading: isLoading, login, signup, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

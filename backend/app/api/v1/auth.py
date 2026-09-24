@@ -19,7 +19,9 @@ from app.schemas.auth import (
     ForgotPasswordResponse,
     ResetPasswordRequest,
     ResetPasswordResponse,
+    SignupRequest,
 )
+import uuid
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -57,6 +59,55 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         access_token=access_token,
         token_type="bearer",
         user=UserResponse.model_validate(user),
+    )
+
+@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup(request: SignupRequest, db: Session = Depends(get_db)):
+    """
+    Registers a new relationship manager or bank advisor.
+    Enforces email uniqueness, creates tenant-scoped user record, and returns signed JWT token.
+    """
+    clean_email = request.email.lower().strip()
+    existing_user = db.query(User).filter(User.email == clean_email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email address already exists.",
+        )
+
+    # Ensure target tenant exists or fallback to central branch
+    target_account = request.account_id or "branch_12_central"
+    account = db.query(Account).filter(Account.id == target_account).first()
+    if not account:
+        target_account = "branch_12_central"
+
+    user_id = f"usr_{uuid.uuid4().hex[:12]}"
+    new_user = User(
+        id=user_id,
+        account_id=target_account,
+        email=clean_email,
+        password_hash=get_password_hash(request.password),
+        full_name=request.full_name.strip(),
+        role="RM",
+        is_active=True,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    token_payload = {
+        "sub": new_user.id,
+        "email": new_user.email,
+        "account_id": new_user.account_id,
+        "role": new_user.role,
+        "full_name": new_user.full_name,
+    }
+    access_token = create_access_token(token_payload)
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(new_user),
     )
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)

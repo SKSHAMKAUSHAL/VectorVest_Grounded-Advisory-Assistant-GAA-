@@ -123,6 +123,7 @@ class RAGPipeline:
     def __init__(self):
         self.threshold = settings.SIMILARITY_THRESHOLD
         self.history_manager = conversation_history_manager
+        self.reranker = reranker
         self._load_system_prompt()
 
     def _load_system_prompt(self):
@@ -271,6 +272,9 @@ class RAGPipeline:
             "context": "\n".join(context_blocks),
             "is_refusal": False,
         }
+
+    # Alias for convenience and architecture consistency
+    retrieve_and_guard = retrieve_and_evaluate
 
     def build_generation_prompts(
         self,
