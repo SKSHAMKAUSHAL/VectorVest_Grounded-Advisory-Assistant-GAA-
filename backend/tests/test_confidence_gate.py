@@ -259,3 +259,50 @@ class TestConfidenceGateGuardrail:
         assert data["is_refusal"] is True
         assert data["similarity_score"] < 0.68
         assert data["answer"] == REFUSAL_MESSAGE
+
+    def test_confidence_gate_boundary_precision_at_threshold(self):
+        """Verifies strict boundary comparison: score < threshold triggers refusal, score >= threshold allows generation."""
+        from app.services.rag import rag_pipeline
+        from unittest.mock import patch
+
+        acc = "test_boundary_acc"
+
+        # Mock vector store search returning score just below 0.68
+        with patch.object(rag_pipeline.reranker, "rerank") as mock_rerank:
+            mock_rerank.return_value = [
+                {"id": "chunk_sub", "score": 0.679, "text": "Sub-threshold chunk text", "metadata": {"document_name": "Doc.pdf"}}
+            ]
+            eval_res = rag_pipeline.retrieve_and_evaluate("test query", account_id=acc)
+            assert eval_res["decision"] == "REFUSAL"
+            assert eval_res["is_refusal"] is True
+            assert eval_res["top_score"] == 0.679
+
+        # Mock vector store search returning score exactly at 0.680
+        with patch.object(rag_pipeline.reranker, "rerank") as mock_rerank:
+            mock_rerank.return_value = [
+                {"id": "chunk_eq", "score": 0.680, "text": "Exact threshold chunk text", "metadata": {"document_name": "Doc.pdf", "clause_id": "Sec 1"}}
+            ]
+            eval_res = rag_pipeline.retrieve_and_evaluate("test query", account_id=acc)
+            assert eval_res["decision"] == "GENERATE"
+            assert eval_res["is_refusal"] is False
+            assert eval_res["top_score"] == 0.680
+
+    def test_confidence_gate_configurable_threshold(self):
+        """Verifies that temporarily setting a higher threshold raises the confidence requirement."""
+        from app.services.rag import rag_pipeline
+        from unittest.mock import patch
+
+        original_thresh = rag_pipeline.threshold
+        try:
+            rag_pipeline.threshold = 0.85
+            with patch.object(rag_pipeline.reranker, "rerank") as mock_rerank:
+                # Score 0.75 would pass default (0.68) but must fail 0.85
+                mock_rerank.return_value = [
+                    {"id": "chunk_mid", "score": 0.75, "text": "Mid-confidence chunk", "metadata": {"document_name": "Doc.pdf"}}
+                ]
+                eval_res = rag_pipeline.retrieve_and_evaluate("test query", account_id="acc_thresh")
+                assert eval_res["decision"] == "REFUSAL"
+                assert eval_res["is_refusal"] is True
+        finally:
+            rag_pipeline.threshold = original_thresh
+
