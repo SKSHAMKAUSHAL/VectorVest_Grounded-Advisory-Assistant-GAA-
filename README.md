@@ -75,6 +75,7 @@ In internal audits:
    { "must": [{ "key": "account_id", "match": { "value": "branch_12_central" } }] }
    ```
 3. **Supersession & Discontinued Filtering:** Active filters automatically exclude chunks tagged with `is_discontinued: true`. Circulars tagged with a `superseded_by` pointer are removed from runtime retrieval.
+4. **Tenant Switch (Branch Switcher):** Users with access to multiple branches can switch the active tenant from the Navbar branch pill without re-login. Switching updates the `account_id` scope and re-partitions vector search, chat, and audit views to the selected branch while preserving strict isolation.
 
 ---
 
