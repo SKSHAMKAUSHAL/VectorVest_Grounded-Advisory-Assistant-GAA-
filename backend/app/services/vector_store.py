@@ -205,6 +205,9 @@ class VectorStore:
         except Exception:
             return 0
 
+    # Convenient alias
+    mark_document_superseded = mark_document_as_superseded
+
     def semantic_search(
         self,
         query_text: str,
