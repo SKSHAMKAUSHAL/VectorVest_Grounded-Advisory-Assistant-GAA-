@@ -90,17 +90,22 @@ class CrossEncoderReranker:
         query: str,
         candidates: List[Dict[str, Any]],
         top_n: int = 5,
+        min_score: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
         """
         Re-scores a candidate list against the query and returns the top_n items
         sorted descending by their cross-encoder score.
+        If min_score is provided, candidates below that threshold are pruned.
         """
         if not candidates:
             return []
 
         if not query or not query.strip():
             # If query is empty, retain original order up to top_n
-            return candidates[:top_n]
+            res = candidates[:top_n]
+            if min_score is not None:
+                res = [c for c in res if float(c.get("score", 0.0)) >= min_score]
+            return res
 
         scored_candidates = []
         for cand in candidates:
@@ -118,6 +123,10 @@ class CrossEncoderReranker:
             item["rerank_score"] = rerank_score
             # Score reflects enhanced relevance
             item["score"] = rerank_score
+
+            if min_score is not None and rerank_score < min_score:
+                continue
+
             scored_candidates.append(item)
 
         # Sort descending by re-ranked score
@@ -125,6 +134,27 @@ class CrossEncoderReranker:
 
         return scored_candidates[:top_n]
 
+    def profile_rerank(
+        self,
+        query: str,
+        candidates: List[Dict[str, Any]],
+        top_n: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Profiles the re-ranking latency in milliseconds for compliance auditing.
+        """
+        import time
+        t0 = time.perf_counter()
+        results = self.rerank(query=query, candidates=candidates, top_n=top_n)
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+        return {
+            "results": results,
+            "latency_ms": round(latency_ms, 3),
+            "input_candidates": len(candidates),
+            "output_candidates": len(results),
+        }
+
 
 # Module-level singleton
 reranker = CrossEncoderReranker()
+

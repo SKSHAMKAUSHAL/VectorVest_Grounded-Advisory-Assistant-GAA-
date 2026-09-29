@@ -83,6 +83,41 @@ class TestCrossEncoderReranker:
         scores = [c["rerank_score"] for c in reranked]
         assert scores == sorted(scores, reverse=True)
 
+    def test_reranker_with_min_score_cutoff(self):
+        """Verifies that candidates below min_score threshold are pruned."""
+        query = "wealth management taxation"
+        candidates = [
+            {"id": "c1", "score": 0.85, "text": "wealth management taxation rules"},
+            {"id": "c2", "score": 0.40, "text": "unrelated retail gardening policy"},
+        ]
+        reranked = reranker.rerank(query=query, candidates=candidates, top_n=5, min_score=0.70)
+        assert len(reranked) == 1
+        assert reranked[0]["id"] == "c1"
+
+    def test_reranker_handles_special_regex_and_punctuation(self):
+        """Ensures query with unescaped regex characters does not throw exceptions."""
+        query = "Tax rate (10%) & capital gains [Schedule 4] + Section 4.2.1?"
+        candidates = [
+            {"id": "c1", "score": 0.70, "text": "Section 4.2.1 specifies capital gains tax rate 10% under Schedule 4."}
+        ]
+        reranked = reranker.rerank(query=query, candidates=candidates, top_n=1)
+        assert len(reranked) == 1
+        assert reranked[0]["rerank_score"] >= 0.70
+
+    def test_reranker_profile_latency(self):
+        """Verifies profile_rerank returns timing statistics within performance budget."""
+        query = "High Yield Debt Fund Section 4.2.1"
+        candidates = [
+            {"id": f"c_{i}", "score": 0.65 + (i * 0.01), "text": f"Clause {i} policy text for bonds"}
+            for i in range(15)
+        ]
+        res = reranker.profile_rerank(query=query, candidates=candidates, top_n=5)
+        assert "latency_ms" in res
+        assert res["latency_ms"] < 20.0  # Must be strictly under 20ms
+        assert res["input_candidates"] == 15
+        assert res["output_candidates"] == 5
+
+
 
 # ---------------------------------------------------------------------------
 # Supersession Filtering Tests
