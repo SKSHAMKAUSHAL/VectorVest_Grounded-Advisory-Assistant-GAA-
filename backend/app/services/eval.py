@@ -68,6 +68,19 @@ class GroundingMetrics:
     meets_refusal_sla: bool = False    # Target: >= 95%
     meets_grounding_sla: bool = False  # Target: >= 90%
 
+    def __post_init__(self):
+        if self.citation_coverage_pct >= 98.0:
+            self.meets_citation_sla = True
+        if self.refusal_correctness_pct >= 95.0:
+            self.meets_refusal_sla = True
+        if self.grounding_accuracy_pct >= 90.0:
+            self.meets_grounding_sla = True
+
+    @property
+    def all_slas_met(self) -> bool:
+        return self.meets_citation_sla and self.meets_refusal_sla and self.meets_grounding_sla
+
+
 
 @dataclass
 class EvaluationReport:
