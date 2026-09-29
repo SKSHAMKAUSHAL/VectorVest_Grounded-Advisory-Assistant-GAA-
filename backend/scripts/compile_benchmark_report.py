@@ -9,8 +9,10 @@ SLA verification metrics, and audit log analysis into docs/benchmark-report.md.
 
 import sys
 import json
+from typing import Optional
 from pathlib import Path
 from datetime import datetime, timezone
+
 
 # Add backend directory to sys.path
 backend_dir = Path(__file__).resolve().parent.parent
@@ -88,8 +90,14 @@ def generate_grounding_kpi_svg(grounding: dict) -> str:
     return "\n".join(svg_lines)
 
 
-def compile_report(data_path: Path, output_path: Path):
+def compile_report(data_path: Optional[Path] = None, output_path: Optional[Path] = None) -> str:
     """Compiles the benchmark evaluation report and writes to docs/benchmark-report.md."""
+    root_dir = Path(__file__).resolve().parent.parent.parent
+    if data_path is None:
+        data_path = root_dir / "data" / "benchmark_results.json"
+    if output_path is None:
+        output_path = root_dir / "docs" / "benchmark-report.md"
+
     if not data_path.exists():
         print(f"Benchmark data file not found at {data_path}. Running benchmark runner first...")
         from scripts.run_latency_grounding_eval import run_benchmark
@@ -97,6 +105,7 @@ def compile_report(data_path: Path, output_path: Path):
 
     with open(data_path, "r", encoding="utf-8") as f:
         data = json.load(f)
+
 
     timestamp = data.get("timestamp", datetime.now(timezone.utc).isoformat())
     latency = data.get("latency", {})
@@ -199,6 +208,8 @@ Total test queries executed: **{len(detailed)}** across 5 regulatory banking adv
         f.write(report_markdown.strip() + "\n")
 
     print(f"Successfully compiled benchmark evaluation report to: {output_path}")
+    return report_markdown
+
 
 
 if __name__ == "__main__":
