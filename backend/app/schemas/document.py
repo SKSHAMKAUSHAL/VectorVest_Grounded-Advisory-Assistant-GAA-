@@ -34,3 +34,17 @@ class DocumentItemResponse(BaseModel):
 class DocumentListResponse(BaseModel):
     total: int
     documents: List[DocumentItemResponse]
+
+class DocumentChunkItem(BaseModel):
+    id: str
+    clause_id: str
+    page_number: int
+    text: str
+    chunk_index: int
+
+class DocumentDetailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    document: DocumentItemResponse
+    chunks: Optional[List[DocumentChunkItem]] = None
+

@@ -59,9 +59,14 @@ In internal audits:
 
 ## 4. Documentation & Resources
 
-- 📄 **High-Level Design:** [docs/hld.md](docs/hld.md)
-- 📐 **Low-Level Design:** [docs/lld.md](docs/lld.md)
-- 📋 **Master Implementation Checklist:** [todo.md](todo.md)
+- 📄 **High-Level Design (HLD):** [docs/hld.md](docs/hld.md)
+- 📐 **Low-Level Design (LLD):** [docs/lld.md](docs/lld.md)
+- 🛡️ **Threat Model & STRIDE Analysis:** [docs/threat-model.md](docs/threat-model.md)
+- 🔒 **Security Architecture & Hardening Guide:** [docs/security.md](docs/security.md)
+- 🚀 **Production Deployment & Docker Guide:** [docs/deployment.md](docs/deployment.md)
+- 🏛️ **Architecture Decision Records (ADRs):** [docs/architecture-decisions.md](docs/architecture-decisions.md)
+- 🧪 **Comprehensive Testing Strategy:** [docs/testing.md](docs/testing.md)
+- 🔍 **Implementation Gap Analysis:** [docs/implementation-gap-analysis.md](docs/implementation-gap-analysis.md)
 - 🎯 **Product Requirements Document:** [PRD.md](PRD.md)
 - 🛡️ **Production System Prompt:** [prompts/system_prompt.txt](prompts/system_prompt.txt)
 
@@ -158,12 +163,47 @@ Swagger API docs will be live at `http://localhost:8000/docs`.
 ### 7.2 Frontend Setup
 ```bash
 cd frontend
-npm install
+npm install --legacy-peer-deps
 npm run dev
 ```
 Open `http://localhost:3000` in your browser.
 
----
+### 7.3 Containerized Production Deployment (Docker Compose)
+Launch the entire multi-tenant stack (PostgreSQL, FastAPI backend, Next.js frontend, and ChromaDB):
+```bash
+docker compose up -d --build
+```
+Health checks:
+- Liveness: `curl http://localhost:8000/health/liveness`
+- Readiness: `curl http://localhost:8000/health/readiness`
+
+### 7.4 Database Migrations (Alembic)
+```bash
+cd backend
+alembic upgrade head
+```
+
+### 7.5 Running the Automated Test Suite
+- **Full Backend Pytest Suite (140 tests):**
+  ```bash
+  backend\venv\Scripts\python.exe -m pytest backend/tests -v
+  ```
+- **Tenant Isolation Attack Suite (10 vectors):**
+  ```bash
+  backend\venv\Scripts\python.exe -m pytest backend/tests/test_tenant_isolation_attacks.py -v
+  ```
+- **Security Attack Simulation Suite (15 vectors):**
+  ```bash
+  backend\venv\Scripts\python.exe -m pytest backend/tests/test_security_attack_simulation.py -v
+  ```
+- **Frontend Vitest Suite (8 tests):**
+  ```bash
+  npm --prefix frontend run test
+  ```
+- **Frontend Production Build Verification:**
+  ```bash
+  npm --prefix frontend run build
+  ```
 
 ## 8. Safety & Compliance Rules
 

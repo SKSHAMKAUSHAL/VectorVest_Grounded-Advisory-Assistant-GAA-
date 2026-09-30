@@ -1,11 +1,14 @@
 import time
 import json
+import logging
 from typing import AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, SessionLocal
+from app.core.config import settings
+from app.core.rate_limit import rate_limit_dependency
 from app.models.models import User, ComplianceAuditLog
 from app.api.deps import get_current_user
 from app.schemas.chat import (
@@ -20,6 +23,7 @@ from app.services.rag import rag_pipeline
 from app.services.llm import llm_service
 from app.services.vector_store import vector_store
 
+logger = logging.getLogger("gaa.chat")
 
 router = APIRouter(prefix="/chat", tags=["Grounded Advisory Chat"])
 
@@ -61,8 +65,7 @@ def record_audit_log(
         db.commit()
     except Exception as e:
         db.rollback()
-        # Non-blocking for client stream, but prints server error
-        print(f"Error persisting audit log: {e}")
+        logger.error("Failed to persist compliance audit log: %s", str(e), exc_info=True)
     finally:
         db.close()
 
@@ -70,6 +73,7 @@ def record_audit_log(
 async def chat_query_stream(
     request: ChatQueryRequest,
     current_user: User = Depends(get_current_user),
+    _rate_limit: bool = Depends(rate_limit_dependency(max_requests=60, window_seconds=60.0, endpoint_tag="chat_query")),
 ):
     """
     Submits an RM advisory query and streams real-time tokens via Server-Sent Events (SSE).
@@ -141,8 +145,13 @@ async def chat_query_stream(
                 latency_ms=latency,
             )
         except Exception as e:
-            error_msg = str(e)
-            yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
+            logger.error("SSE stream generation error: %s", str(e), exc_info=True)
+            safe_error = (
+                f"Advisory generation error: {str(e)}"
+                if settings.ENVIRONMENT in ("development", "test")
+                else "An unexpected error occurred during grounded advisory generation. Please retry or escalate."
+            )
+            yield f"event: error\ndata: {json.dumps({'error': safe_error})}\n\n"
             yield "event: done\ndata: [DONE]\n\n"
             latency = int((time.time() - start_time) * 1000)
             record_audit_log(
@@ -152,7 +161,7 @@ async def chat_query_stream(
                 rewritten_query=eval_result.get("rewritten_query", request.query),
                 chunk_ids=eval_result.get("retrieved_chunk_ids", []),
                 score=eval_result.get("top_score", 0.0),
-                response_text=f"Stream error: {error_msg}",
+                response_text=f"Stream error: {safe_error}",
                 is_refusal=True,
                 latency_ms=latency,
             )
@@ -173,6 +182,7 @@ def chat_query_sync(
     request: ChatQueryRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    _rate_limit: bool = Depends(rate_limit_dependency(max_requests=60, window_seconds=60.0, endpoint_tag="chat_query")),
 ):
     """
     Synchronous version of /query.
@@ -221,7 +231,7 @@ def chat_query_sync(
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"Error persisting synchronous audit log: {e}")
+        logger.error("Failed to persist synchronous audit log: %s", str(e), exc_info=True)
 
     return ChatQueryResponse(
         answer=response_text,
@@ -236,6 +246,7 @@ def chat_query_sync(
 def semantic_search_chunks(
     request: SemanticSearchRequest,
     current_user: User = Depends(get_current_user),
+    _rate_limit: bool = Depends(rate_limit_dependency(max_requests=100, window_seconds=60.0, endpoint_tag="chat_search")),
 ):
     """
     Executes top-k semantic search directly against the tenant's indexed vector knowledge base.
@@ -258,3 +269,54 @@ def semantic_search_chunks(
         results=results,
     )
 
+@router.get("/citation-preview")
+def preview_citation_chunk(
+    chunk_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Tenant-secured citation preview endpoint.
+    Retrieves full source excerpt for a given chunk_id strictly scoped to the caller's account_id.
+    Prevents unauthorized cross-tenant chunk observation.
+    """
+    if not chunk_id or not isinstance(chunk_id, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Valid chunk_id parameter is required.",
+        )
+
+    try:
+        results = vector_store.collection.get(
+            ids=[chunk_id],
+            include=["documents", "metadatas"],
+        )
+    except Exception as e:
+        logger.error("Error retrieving citation preview chunk: %s", str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to query citation chunk.",
+        )
+
+    if not results or not results["ids"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Citation chunk not found or access denied.",
+        )
+
+    meta = results["metadatas"][0] if results["metadatas"] else {}
+    if str(meta.get("account_id")) != str(current_user.account_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Citation chunk not found or access denied.",
+        )
+
+    doc_text = results["documents"][0] if results["documents"] else ""
+    return {
+        "chunk_id": chunk_id,
+        "account_id": current_user.account_id,
+        "document_name": meta.get("document_name", "Unknown"),
+        "version": meta.get("document_version", "v1.0"),
+        "clause_id": meta.get("clause_id", ""),
+        "page_number": int(meta.get("page_number", 1)),
+        "text": doc_text,
+    }

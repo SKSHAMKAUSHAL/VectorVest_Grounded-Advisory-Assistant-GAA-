@@ -25,6 +25,8 @@ class LLMService:
                 self.openai_client = None
 
     def _is_mock_mode(self) -> bool:
+        if settings.ENVIRONMENT == "production":
+            return False
         if self.provider == "groq" and self.groq_client is not None:
             return False
         if self.provider == "openai" and self.openai_client is not None:
@@ -57,7 +59,11 @@ class LLMService:
                     temperature=temperature,
                 )
                 return response.choices[0].message.content or ""
-        except Exception:
+            elif settings.ENVIRONMENT == "production":
+                raise RuntimeError(f"Configured LLM provider '{self.provider}' client is not initialized in production.")
+        except Exception as e:
+            if settings.ENVIRONMENT == "production":
+                raise RuntimeError(f"LLM generation service failed: {str(e)}") from e
             return self._mock_generate(system_prompt, user_prompt)
 
         return self._mock_generate(system_prompt, user_prompt)
@@ -106,8 +112,12 @@ class LLMService:
                     if delta:
                         yield delta
                 return
-        except Exception:
-            # Fallback on runtime failure
+            elif settings.ENVIRONMENT == "production":
+                raise RuntimeError(f"Configured LLM provider '{self.provider}' client is not initialized in production.")
+        except Exception as e:
+            if settings.ENVIRONMENT == "production":
+                raise RuntimeError(f"LLM streaming service failed: {str(e)}") from e
+            # Fallback on runtime failure in dev/test
             text = self._mock_generate(system_prompt, user_prompt)
             words = text.split(" ")
             for i, word in enumerate(words):
@@ -132,7 +142,9 @@ class LLMService:
 
         # Check if context was supplied in the user_prompt or system_prompt
         context_text = ""
-        if "CONTEXT CHUNKS:" in user_prompt:
+        if "<untrusted_evidence>" in user_prompt:
+            context_text = user_prompt.split("<untrusted_evidence>")[1].split("</untrusted_evidence>")[0]
+        elif "CONTEXT CHUNKS:" in user_prompt:
             context_text = user_prompt.split("CONTEXT CHUNKS:")[1]
             if "CONVERSATION HISTORY:" in context_text:
                 context_text = context_text.split("CONVERSATION HISTORY:")[0]

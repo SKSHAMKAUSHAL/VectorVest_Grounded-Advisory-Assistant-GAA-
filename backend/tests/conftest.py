@@ -11,19 +11,46 @@ backend_dir = Path(__file__).resolve().parent.parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
+from app.core.config import settings
+settings.ENVIRONMENT = "test"
+settings.DISABLE_RATE_LIMITS = True
+
 from app.core.database import Base, get_db
 from app.core.security import get_password_hash
 from app.models.models import Account, User, PasswordResetToken, Document, ComplianceAuditLog
 from app.services.vector_store import vector_store
 from app.main import app
 
-# Shared in-memory SQLite engine
+import threading
+from sqlalchemy import event
+
+# Shared in-memory SQLite engine with thread-safe execution lock
 test_engine = create_engine(
     "sqlite:///:memory:",
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+_sqlite_cursor_lock = threading.RLock()
+
+@event.listens_for(test_engine, "before_cursor_execute")
+def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    _sqlite_cursor_lock.acquire()
+
+@event.listens_for(test_engine, "after_cursor_execute")
+def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    try:
+        _sqlite_cursor_lock.release()
+    except RuntimeError:
+        pass
+
+@event.listens_for(test_engine, "handle_error")
+def _handle_error(exception_context):
+    try:
+        _sqlite_cursor_lock.release()
+    except RuntimeError:
+        pass
 
 def override_get_db():
     db = TestingSessionLocal()

@@ -1,12 +1,22 @@
+import re
+from pathlib import Path
 from datetime import datetime, date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.config import settings
+from app.core.rate_limit import rate_limit_dependency
 from app.models.models import User, Document
 from app.api.deps import get_current_user, require_role
-from app.schemas.document import DocumentUploadResponse, DocumentItemResponse, DocumentListResponse
+from app.schemas.document import (
+    DocumentUploadResponse,
+    DocumentItemResponse,
+    DocumentListResponse,
+    DocumentChunkItem,
+    DocumentDetailResponse,
+)
 from app.services.ingestion import ingestion_pipeline
 from app.services.vector_store import vector_store
 
@@ -24,9 +34,11 @@ async def upload_document(
     superseded_by: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    _rate_limit: bool = Depends(rate_limit_dependency(max_requests=20, window_seconds=60.0, endpoint_tag="documents_upload")),
 ):
     """
     Uploads and indexes an investment policy PDF, tax circular, or product brochure.
+    Validates MIME type, magic bytes, file size, and extension to prevent malicious uploads.
     Extracts text, applies clause-boundary chunking, computes vector embeddings,
     and stores chunks in the tenant's cumulative vector knowledge store.
     """
@@ -44,6 +56,15 @@ async def upload_document(
             detail="Invalid effective_date format. Must be ISO-8601 (YYYY-MM-DD).",
         )
 
+    raw_filename = Path(file.filename or "uploaded_document.pdf").name
+    filename = re.sub(r"[^a-zA-Z0-9_.-]", "_", raw_filename).strip()
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext not in ("pdf", "txt"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file format. Only PDF and TXT documents are supported.",
+        )
+
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(
@@ -51,12 +72,25 @@ async def upload_document(
             detail="Uploaded file is empty.",
         )
 
+    if len(file_bytes) > settings.MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)}MB.",
+        )
+
+    # Magic byte validation: PDF must begin with %PDF-
+    if ext == "pdf" and not file_bytes.startswith(b"%PDF-"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid PDF file: corrupted header or incorrect magic bytes signature.",
+        )
+
     try:
         result = ingestion_pipeline.process_and_index_document(
             db=db,
             account_id=current_user.account_id,
             user_id=current_user.id,
-            filename=file.filename or "uploaded_document.pdf",
+            filename=filename,
             file_bytes=file_bytes,
             doc_type=doc_type,
             version=version,
@@ -98,6 +132,80 @@ def list_documents(
         total=total,
         documents=[DocumentItemResponse.model_validate(d) for d in docs],
     )
+
+@router.get("/{document_id}", response_model=DocumentItemResponse)
+def get_document(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieves document metadata by ID with strict tenant isolation.
+    """
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.account_id == current_user.account_id,
+    ).first()
+
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or does not belong to your tenant account.",
+        )
+
+    return DocumentItemResponse.model_validate(doc)
+
+@router.get("/{document_id}/chunks", response_model=List[DocumentChunkItem])
+def get_document_chunks(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieves chunk excerpts for a document with tenant-scoped verification.
+    """
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.account_id == current_user.account_id,
+    ).first()
+
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or does not belong to your tenant account.",
+        )
+
+    try:
+        results = vector_store.collection.get(
+            where={
+                "$and": [
+                    {"account_id": current_user.account_id},
+                    {"document_id": document_id},
+                ]
+            },
+            include=["documents", "metadatas"],
+        )
+        chunk_items = []
+        if results and results["ids"]:
+            for i, chunk_id in enumerate(results["ids"]):
+                meta = results["metadatas"][i] if results["metadatas"] else {}
+                doc_text = results["documents"][i] if results["documents"] else ""
+                chunk_items.append(
+                    DocumentChunkItem(
+                        id=chunk_id,
+                        clause_id=str(meta.get("clause_id", f"Page {meta.get('page_number', 1)}")),
+                        page_number=int(meta.get("page_number", 1)),
+                        text=doc_text,
+                        chunk_index=int(meta.get("chunk_index", i)),
+                    )
+                )
+            chunk_items.sort(key=lambda c: c.chunk_index)
+        return chunk_items
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve document chunks: {str(e)}",
+        )
 
 @router.delete("/{document_id}")
 def delete_document(

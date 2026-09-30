@@ -54,8 +54,12 @@ class EmbeddingService:
                     model=self.model,
                 )
                 return response.data[0].embedding
-            except Exception:
+            except Exception as e:
+                if settings.ENVIRONMENT == "production":
+                    raise RuntimeError(f"Embedding service failed: {str(e)}") from e
                 return _deterministic_mock_embedding(text)
+        elif settings.ENVIRONMENT == "production":
+            raise RuntimeError("Embedding service unavailable: OpenAI client not initialized in production.")
         return _deterministic_mock_embedding(text)
 
     def get_embeddings(self, texts: List[str]) -> List[List[float]]:
@@ -70,8 +74,12 @@ class EmbeddingService:
                     model=self.model,
                 )
                 return [d.embedding for d in response.data]
-            except Exception:
+            except Exception as e:
+                if settings.ENVIRONMENT == "production":
+                    raise RuntimeError(f"Embedding batch service failed: {str(e)}") from e
                 return [_deterministic_mock_embedding(t) for t in texts]
+        elif settings.ENVIRONMENT == "production":
+            raise RuntimeError("Embedding service unavailable: OpenAI client not initialized in production.")
 
         return [_deterministic_mock_embedding(t) for t in texts]
 

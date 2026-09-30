@@ -1,6 +1,7 @@
 
 import io
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
@@ -87,9 +88,13 @@ class IngestionPipeline:
         6. Persists chunks into ChromaDB (cumulative memory).
         7. Updates database record to 'INDEXED'.
         """
-        # Save file to disk
-        safe_filename = f"{account_id}_{version}_{filename}".replace(" ", "_")
-        target_path = self.upload_dir / safe_filename
+        # Sanitize filename to prevent path/directory traversal
+        clean_basename = re.sub(r"[^a-zA-Z0-9_.-]", "_", Path(filename).name)
+        safe_filename = f"{account_id}_{version}_{clean_basename}"
+        target_path = (self.upload_dir / safe_filename).resolve()
+        if not str(target_path).startswith(str(self.upload_dir)):
+            raise ValueError("Path traversal attempt detected in filename.")
+
         with open(target_path, "wb") as f:
             f.write(file_bytes)
 
@@ -97,7 +102,7 @@ class IngestionPipeline:
         doc_record = Document(
             account_id=account_id,
             uploaded_by=user_id,
-            filename=filename,
+            filename=clean_basename,
             file_path=str(target_path),
             version=version,
             doc_type=doc_type,

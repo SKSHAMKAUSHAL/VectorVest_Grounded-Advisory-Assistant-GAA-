@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+
+# Environment & Local Secrets
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Python
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+backend/.pytest_cache
+backend/venv
+backend/data/uploads/*
+backend/data/chroma/*
+backend/tests
+backend/scripts
+
+# Node / Frontend
+**/node_modules
+frontend/.next
+frontend/e2e
+frontend/coverage
+
+# IDE / System
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.log
+
+# Documentation
+docs/
+artifacts/
