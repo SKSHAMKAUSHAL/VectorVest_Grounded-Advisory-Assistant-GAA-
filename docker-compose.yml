@@ -1,0 +1,102 @@
+version: "3.8"
+
+services:
+  # Relational Database for Users, Accounts, Documents, and Compliance Audit Trail
+  postgres:
+    image: postgres:16-alpine
+    container_name: gaa_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_secure_pass_987}
+      POSTGRES_DB: ${POSTGRES_DB:-gaa_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-gaa_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - gaa_internal
+
+  # Grounded Advisory Assistant Backend (FastAPI + ChromaDB + RAG)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gaa_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_secure_pass_987}@postgres:5432/${POSTGRES_DB:-gaa_db}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 480
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      VECTOR_DB_TYPE: chromadb
+      VECTOR_DB_PATH: /app/data/chroma
+      CONFIDENCE_THRESHOLD: 0.65
+      MAX_UPLOAD_SIZE_BYTES: 26214400
+    volumes:
+      - backend_uploads:/app/data/uploads
+      - backend_chroma:/app/data/chroma
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/readiness || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - gaa_internal
+      - gaa_public
+
+  # WealthGuard AI Modern Web Frontend (Next.js 14 Standalone)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gaa_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - gaa_public
+
+networks:
+  # Isolated database network not exposed to host or internet
+  gaa_internal:
+    driver: bridge
+    internal: true
+  # Application network for frontend and public API reverse proxy
+  gaa_public:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_uploads:
+    driver: local
+  backend_chroma:
+    driver: local

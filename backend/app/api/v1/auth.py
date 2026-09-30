@@ -23,11 +23,16 @@ from app.schemas.auth import (
 )
 import uuid
 from app.api.deps import get_current_user
+from app.core.rate_limit import rate_limit_dependency
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/login", response_model=TokenResponse)
-def login(request: LoginRequest, db: Session = Depends(get_db)):
+def login(
+    request: LoginRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: bool = Depends(rate_limit_dependency(max_requests=15, window_seconds=60.0, endpoint_tag="auth_login")),
+):
     """
     Authenticate a user with email and password.
     Returns a signed JWT bearer token containing user identity and account_id scope.
@@ -62,7 +67,11 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     )
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def signup(request: SignupRequest, db: Session = Depends(get_db)):
+def signup(
+    request: SignupRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: bool = Depends(rate_limit_dependency(max_requests=10, window_seconds=60.0, endpoint_tag="auth_signup")),
+):
     """
     Registers a new relationship manager or bank advisor.
     Enforces email uniqueness, creates tenant-scoped user record, and returns signed JWT token.
@@ -75,11 +84,14 @@ def signup(request: SignupRequest, db: Session = Depends(get_db)):
             detail="An account with this email address already exists.",
         )
 
-    # Ensure target tenant exists or fallback to central branch
+    # Ensure target tenant exists
     target_account = request.account_id or "branch_12_central"
     account = db.query(Account).filter(Account.id == target_account).first()
     if not account:
-        target_account = "branch_12_central"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Specified branch account does not exist.",
+        )
 
     user_id = f"usr_{uuid.uuid4().hex[:12]}"
     new_user = User(
@@ -111,16 +123,21 @@ def signup(request: SignupRequest, db: Session = Depends(get_db)):
     )
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
-def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(
+    request: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: bool = Depends(rate_limit_dependency(max_requests=5, window_seconds=60.0, endpoint_tag="auth_forgot_password")),
+):
     """
     Initiates a password reset flow.
     Generates a cryptographically secure, time-limited token.
+    Enforces identical generic response to prevent account enumeration.
     """
+    generic_message = "If the email exists in our system, password reset instructions have been dispatched."
     user = db.query(User).filter(User.email == request.email.lower().strip()).first()
     if not user:
-        # Prevent user enumeration in production while returning a safe message
         return ForgotPasswordResponse(
-            message="If the email exists in our system, password reset instructions have been dispatched.",
+            message=generic_message,
             reset_token=None,
         )
 
@@ -142,13 +159,20 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
     db.add(reset_record)
     db.commit()
 
+    # In production, never leak the raw token in API response
+    exposed_token = raw_token if settings.ENVIRONMENT in ("development", "test") else None
+
     return ForgotPasswordResponse(
-        message="Password reset instructions have been generated successfully.",
-        reset_token=raw_token, # Returned for dev / API verification
+        message=generic_message,
+        reset_token=exposed_token,
     )
 
 @router.post("/reset-password", response_model=ResetPasswordResponse)
-def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+def reset_password(
+    request: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: bool = Depends(rate_limit_dependency(max_requests=10, window_seconds=60.0, endpoint_tag="auth_reset_password")),
+):
     """
     Verifies the reset token and updates the user's password.
     """

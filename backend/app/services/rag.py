@@ -291,10 +291,16 @@ class RAGPipeline:
         history_str = "\n".join(history_lines) if history_lines else "None."
 
         user_prompt = (
-            f"CONTEXT CHUNKS:\n{context}\n\n"
-            f"CONVERSATION HISTORY:\n{history_str}\n\n"
-            f"RELATIONSHIP MANAGER'S INQUIRY:\n{query}\n"
-            f"(Internal Search Intent: {rewritten_query})\n\n"
+            "<untrusted_evidence>\n"
+            f"{context}\n"
+            "</untrusted_evidence>\n\n"
+            "<untrusted_conversation_history>\n"
+            f"{history_str}\n"
+            "</untrusted_conversation_history>\n\n"
+            "<untrusted_user_query>\n"
+            f"{query}\n"
+            f"(Internal Search Intent: {rewritten_query})\n"
+            "</untrusted_user_query>\n\n"
             "GROUNDED ADVISORY RESPONSE:"
         )
 

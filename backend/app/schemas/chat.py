@@ -4,12 +4,12 @@ from datetime import datetime
 
 
 class ChatMessage(BaseModel):
-    role: str = Field(..., description="'user' or 'assistant'")
-    content: str
+    role: str = Field(..., pattern=r"^(user|assistant)$", description="'user' or 'assistant'")
+    content: str = Field(..., max_length=5000)
 
 class ChatQueryRequest(BaseModel):
-    query: str = Field(..., min_length=2, description="The RM's natural language policy or tax question.")
-    chat_history: Optional[List[ChatMessage]] = Field(default_factory=list, description="Prior conversational context.")
+    query: str = Field(..., min_length=2, max_length=2000, description="The RM's natural language policy or tax question.")
+    chat_history: Optional[List[ChatMessage]] = Field(default_factory=list, max_length=30, description="Prior conversational context.")
 
 class CitationItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
