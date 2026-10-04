@@ -9,7 +9,7 @@ from app.services.embedding import embedding_service
 
 class VectorStore:
     def __init__(self, persist_dir: Optional[str] = None):
-        target_dir = persist_dir or settings.CHROMA_PERSIST_DIR
+        target_dir = persist_dir or settings.chroma_effective_dir
         db_path = Path(target_dir).resolve()
         db_path.mkdir(parents=True, exist_ok=True)
 

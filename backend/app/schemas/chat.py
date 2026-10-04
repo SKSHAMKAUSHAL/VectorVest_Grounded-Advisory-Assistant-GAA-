@@ -8,7 +8,7 @@ class ChatMessage(BaseModel):
     content: str = Field(..., max_length=5000)
 
 class ChatQueryRequest(BaseModel):
-    query: str = Field(..., min_length=2, max_length=2000, description="The RM's natural language policy or tax question.")
+    query: str = Field(..., min_length=2, max_length=4000, description="The RM's natural language policy or tax question.")
     chat_history: Optional[List[ChatMessage]] = Field(default_factory=list, max_length=30, description="Prior conversational context.")
 
 class CitationItem(BaseModel):
@@ -72,7 +72,7 @@ class AuditLogListResponse(BaseModel):
     logs: List[AuditLogItemResponse]
 
 class SemanticSearchRequest(BaseModel):
-    query: str = Field(..., min_length=1, description="The natural language query to search for.")
+    query: str = Field(..., min_length=1, max_length=4000, description="The natural language query to search for.")
     top_k: int = Field(default=5, ge=1, le=50, description="Maximum number of top results to retrieve.")
     include_discontinued: bool = Field(default=False, description="Whether to include discontinued products.")
     doc_type: Optional[str] = Field(default=None, description="Optional document type filter.")

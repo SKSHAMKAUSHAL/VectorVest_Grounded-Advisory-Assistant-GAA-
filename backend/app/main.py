@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -30,7 +31,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Enterprise Security Headers Middleware
+# Enterprise Security Headers Middleware (OWASP / Section 15-23 Compliance)
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -38,9 +39,10 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
     if settings.ENVIRONMENT == "production":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
     return response
 
 # Configure CORS with strict origin controls
@@ -83,7 +85,7 @@ def readiness_check():
     Readiness probe: validates database connection and vector store availability.
     Returns 503 if any required infrastructure is degraded.
     """
-    checks = {"database": "unknown", "vector_store": "unknown"}
+    checks = {"database": "unknown", "vector_store": "unknown", "chroma_path": "unknown"}
     is_ready = True
 
     # Check relational DB
@@ -95,10 +97,14 @@ def readiness_check():
         checks["database"] = f"error: {str(e)}"
         is_ready = False
 
-    # Check ChromaDB
+    # Check ChromaDB and persistence path
     try:
+        chroma_dir = Path(settings.chroma_effective_dir).resolve()
+        if not chroma_dir.exists():
+            chroma_dir.mkdir(parents=True, exist_ok=True)
         _ = vector_store.collection.count()
         checks["vector_store"] = "connected"
+        checks["chroma_path"] = str(chroma_dir)
     except Exception as e:
         checks["vector_store"] = f"error: {str(e)}"
         is_ready = False
