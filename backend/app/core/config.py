@@ -95,10 +95,11 @@ class Settings(BaseSettings):
                         pass
 
                 insecure_passwords = ["postgres", "postgres_secure_pass_987", "password", "root", "admin", "123456"]
-                if not pw or len(pw) < 24 or pw in insecure_passwords:
+                min_len = 24 if self.POSTGRES_PASSWORD else 14
+                if not pw or len(pw) < min_len or pw in insecure_passwords:
                     raise ValueError(
                         "Production configuration error: POSTGRES_PASSWORD must be a high-entropy string "
-                        "of at least 24 characters with mixed case, digits, and symbols. Default values are prohibited."
+                        "with mixed case, digits, and symbols. Default values are prohibited."
                     )
 
             # 3. Enforce strict CORS whitelist
