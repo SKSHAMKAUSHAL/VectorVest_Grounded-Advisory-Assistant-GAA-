@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     POSTGRES_DB: Optional[str] = None
 
     # Security & JWT
-    JWT_SECRET_KEY: str = "dev-secret-key-grounded-advisory-assistant-team02-super-secure"
+    JWT_SECRET_KEY: str = "c8f1e29a34b578d0f12a3b4c5d6e7f80123456789abcdef0123456789abcdef0"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     RESET_TOKEN_EXPIRE_MINUTES: int = 15
