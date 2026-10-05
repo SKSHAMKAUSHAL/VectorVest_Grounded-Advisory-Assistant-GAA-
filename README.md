@@ -304,4 +304,14 @@ To meet the stringent accuracy demands of wealth management and compliance advis
    - Strict confidence preservation: boosts relevant clauses without lowering semantic score below the deterministic $\ge 0.68$ gate.
    - Truncates context to the top $k=3\text{--}5$ highest-fidelity clauses.
 
+readme-update-3
 Every generated response is designed to remain auditable through clause-level citations.
+=======
+ readme-update-5
+The system combines semantic search with reranking to surface the most relevant policy clauses.
+=======
+readme-update-4
+Approved documents remain the source of truth for retrieval, ranking, and answer generation.
+This project prioritizes traceable, policy-grounded answers for wealth management teams.
+
+
