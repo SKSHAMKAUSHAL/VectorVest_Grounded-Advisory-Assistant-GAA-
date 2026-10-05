@@ -114,3 +114,21 @@ File extension checking is insufficient to prevent attackers from renaming malwa
 
 ### Status
 Accepted & Implemented.
+
+---
+
+## ADR 008: Treat Vercel Local Storage as Ephemeral
+
+### Context
+Vercel runs the backend as a serverless function, where local filesystem state is not a durable shared store. The Vercel entrypoint and backend settings direct the local ChromaDB directory to `/tmp/chromadb`; when no durable database URL is configured, SQLite is directed to `/tmp/app.db` as a fallback.
+
+### Decision
+1. Treat local SQLite and ChromaDB files in a Vercel deployment as temporary runtime data, not as persistent production storage.
+2. Configure a durable external database URL for production relational data; do not rely on the SQLite fallback for retention.
+3. Do not rely on local ChromaDB persistence to retain uploaded-document vectors across function instances or restarts. Before using Vercel for durable advisory workflows, provide a persistent vector-storage strategy or choose a runtime with persistent storage.
+
+### Consequences
+Local filesystem state can be unavailable to a later invocation or instance. Deployments that use ephemeral storage must plan how source documents and vector indexes are retained and recovered; a successful deployment or health check does not establish data durability.
+
+### Status
+Accepted as a deployment constraint.
