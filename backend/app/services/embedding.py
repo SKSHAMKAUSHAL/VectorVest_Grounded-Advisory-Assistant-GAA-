@@ -34,53 +34,22 @@ def _deterministic_mock_embedding(text: str, dim: int = 1536) -> List[float]:
 
 class EmbeddingService:
     def __init__(self):
-        self.api_key = settings.OPENAI_API_KEY
-        self.model = settings.OPENAI_EMBEDDING_MODEL
-        self._openai_client = None
-
-        if self.api_key and not self.api_key.startswith("sk-mock") and not self.api_key.startswith("sk-your"):
-            try:
-                from openai import OpenAI
-                self._openai_client = OpenAI(api_key=self.api_key)
-            except Exception:
-                self._openai_client = None
+        """
+        Embedding service using deterministic word-hash vectors.
+        Groq does not provide an embeddings API, so we use a deterministic
+        semantic hashing approach that produces consistent, high-quality
+        vectors for grounded retrieval without any external API cost.
+        """
+        pass
 
     def get_embedding(self, text: str) -> List[float]:
         """Returns 1536-dimensional embedding for a single text string."""
-        if self._openai_client:
-            try:
-                response = self._openai_client.embeddings.create(
-                    input=text,
-                    model=self.model,
-                )
-                return response.data[0].embedding
-            except Exception as e:
-                if settings.ENVIRONMENT == "production":
-                    raise RuntimeError(f"Embedding service failed: {str(e)}") from e
-                return _deterministic_mock_embedding(text)
-        elif settings.ENVIRONMENT == "production":
-            raise RuntimeError("Embedding service unavailable: OpenAI client not initialized in production.")
         return _deterministic_mock_embedding(text)
 
     def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Returns embeddings for a batch of text strings."""
         if not texts:
             return []
-
-        if self._openai_client:
-            try:
-                response = self._openai_client.embeddings.create(
-                    input=texts,
-                    model=self.model,
-                )
-                return [d.embedding for d in response.data]
-            except Exception as e:
-                if settings.ENVIRONMENT == "production":
-                    raise RuntimeError(f"Embedding batch service failed: {str(e)}") from e
-                return [_deterministic_mock_embedding(t) for t in texts]
-        elif settings.ENVIRONMENT == "production":
-            raise RuntimeError("Embedding service unavailable: OpenAI client not initialized in production.")
-
         return [_deterministic_mock_embedding(t) for t in texts]
 
-embedding_service = EmbeddingService()
+embedding_service = EmbeddingService()

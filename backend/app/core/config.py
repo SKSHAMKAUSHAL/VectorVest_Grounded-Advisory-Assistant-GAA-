@@ -28,13 +28,10 @@ class Settings(BaseSettings):
     VECTOR_DB_TYPE: str = "chromadb"
     SIMILARITY_THRESHOLD: float = 0.68
 
-    # LLM & Embeddings
+    # LLM (Groq)
     LLM_PROVIDER: str = "groq"
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-20b"
-    OPENAI_API_KEY: str = ""
-    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
-    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
 
     # Upload Limits
     MAX_UPLOAD_SIZE_BYTES: int = 25 * 1024 * 1024  # 25 MB
@@ -107,22 +104,13 @@ class Settings(BaseSettings):
                 raise ValueError("Production configuration error: Wildcard CORS origin is prohibited.")
 
             # 4. Enforce production LLM credentials (fail closed)
-            if self.LLM_PROVIDER == "groq":
-                if (
-                    not self.GROQ_API_KEY
-                    or self.GROQ_API_KEY.startswith("gsk_mock")
-                    or self.GROQ_API_KEY.startswith("gsk_your")
-                    or "your_groq_api_key" in self.GROQ_API_KEY
-                ):
-                    raise ValueError("Production configuration error: Valid GROQ_API_KEY is required for Groq provider.")
-            elif self.LLM_PROVIDER == "openai":
-                if (
-                    not self.OPENAI_API_KEY
-                    or self.OPENAI_API_KEY.startswith("sk-mock")
-                    or self.OPENAI_API_KEY.startswith("sk-your")
-                    or "your_openai_api_key" in self.OPENAI_API_KEY
-                ):
-                    raise ValueError("Production configuration error: Valid OPENAI_API_KEY is required for OpenAI provider.")
+            if (
+                not self.GROQ_API_KEY
+                or self.GROQ_API_KEY.startswith("gsk_mock")
+                or self.GROQ_API_KEY.startswith("gsk_your")
+                or "your_groq_api_key" in self.GROQ_API_KEY
+            ):
+                raise ValueError("Production configuration error: Valid GROQ_API_KEY is required.")
 
     model_config = SettingsConfigDict(
         env_file=[

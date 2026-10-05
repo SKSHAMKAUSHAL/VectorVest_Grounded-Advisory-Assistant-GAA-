@@ -30,17 +30,8 @@ export default function ChatPage() {
   const router = useRouter();
   const { user, token, isLoading } = useAuth();
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("gaa_chat_history");
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse saved chat history:", e);
-      }
-    }
-    return [];
-  });
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [hasMounted, setHasMounted] = useState(false);
   const [inputQuery, setInputQuery] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
@@ -54,16 +45,37 @@ export default function ChatPage() {
     }
   }, [isLoading, token, router]);
 
+  // Load chat history safely on mount (avoiding SSR empty overwrite)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("gaa_chat_history", JSON.stringify(messages));
-      } catch (e) {
-        console.error("Failed to save chat history:", e);
+    if (!user) return;
+    try {
+      const key = `gaa_chat_history_${user.id}`;
+      const saved = localStorage.getItem(key) || localStorage.getItem("gaa_chat_history");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        }
       }
+    } catch (e) {
+      console.error("Failed to parse saved chat history:", e);
+    }
+    setHasMounted(true);
+  }, [user]);
+
+  // Persist chat history only AFTER initial mount has finished and messages are loaded
+  useEffect(() => {
+    if (!hasMounted || !user) return;
+    try {
+      const key = `gaa_chat_history_${user.id}`;
+      const toSave = messages.filter((m) => m.content && m.content.trim().length > 0);
+      localStorage.setItem(key, JSON.stringify(toSave));
+      localStorage.setItem("gaa_chat_history", JSON.stringify(toSave));
+    } catch (e) {
+      console.error("Failed to save chat history:", e);
     }
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isGenerating]);
+  }, [messages, isGenerating, hasMounted, user]);
 
   if (isLoading || !user) {
     return (
@@ -84,7 +96,10 @@ export default function ChatPage() {
     setInputQuery("");
     setIsGenerating(true);
 
-    const historyPayload = messages.map((m) => ({ role: m.role, content: m.content }));
+    const historyPayload = messages
+      .filter((m) => m.content && m.content.trim().length > 0)
+      .slice(-20)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     let streamedContent = "";
 
@@ -245,6 +260,9 @@ export default function ChatPage() {
                   onClick={() => {
                     setMessages([]);
                     if (typeof window !== "undefined") {
+                      if (user) {
+                        localStorage.removeItem(`gaa_chat_history_${user.id}`);
+                      }
                       localStorage.removeItem("gaa_chat_history");
                     }
                   }}

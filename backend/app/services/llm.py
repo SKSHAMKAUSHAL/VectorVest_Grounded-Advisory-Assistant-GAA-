@@ -6,9 +6,7 @@ class LLMService:
     def __init__(self):
         self.provider = settings.LLM_PROVIDER.lower()
         self.groq_api_key = settings.GROQ_API_KEY
-        self.openai_api_key = settings.OPENAI_API_KEY
         self.groq_client = None
-        self.openai_client = None
 
         if self.groq_api_key and not self.groq_api_key.startswith("gsk_mock") and not self.groq_api_key.startswith("gsk_your"):
             try:
@@ -17,19 +15,12 @@ class LLMService:
             except Exception:
                 self.groq_client = None
 
-        if self.openai_api_key and not self.openai_api_key.startswith("sk-mock") and not self.openai_api_key.startswith("sk-your"):
-            try:
-                from openai import OpenAI
-                self.openai_client = OpenAI(api_key=self.openai_api_key)
-            except Exception:
-                self.openai_client = None
-
     def _is_mock_mode(self) -> bool:
+        if settings.ENVIRONMENT == "test":
+            return True
         if settings.ENVIRONMENT == "production":
             return False
-        if self.provider == "groq" and self.groq_client is not None:
-            return False
-        if self.provider == "openai" and self.openai_client is not None:
+        if self.groq_client is not None:
             return False
         return True
 
@@ -39,7 +30,7 @@ class LLMService:
             return self._mock_generate(system_prompt, user_prompt)
 
         try:
-            if self.provider == "groq" and self.groq_client:
+            if self.groq_client:
                 response = self.groq_client.chat.completions.create(
                     model=settings.GROQ_MODEL,
                     messages=[
@@ -49,18 +40,8 @@ class LLMService:
                     temperature=temperature,
                 )
                 return response.choices[0].message.content or ""
-            elif self.openai_client:
-                response = self.openai_client.chat.completions.create(
-                    model=settings.OPENAI_CHAT_MODEL,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=temperature,
-                )
-                return response.choices[0].message.content or ""
             elif settings.ENVIRONMENT == "production":
-                raise RuntimeError(f"Configured LLM provider '{self.provider}' client is not initialized in production.")
+                raise RuntimeError("Groq LLM client is not initialized in production.")
         except Exception as e:
             if settings.ENVIRONMENT == "production":
                 raise RuntimeError(f"LLM generation service failed: {str(e)}") from e
@@ -82,7 +63,7 @@ class LLMService:
             return
 
         try:
-            if self.provider == "groq" and self.groq_client:
+            if self.groq_client:
                 stream = self.groq_client.chat.completions.create(
                     model=settings.GROQ_MODEL,
                     messages=[
@@ -97,23 +78,8 @@ class LLMService:
                     if delta:
                         yield delta
                 return
-            elif self.openai_client:
-                stream = self.openai_client.chat.completions.create(
-                    model=settings.OPENAI_CHAT_MODEL,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=temperature,
-                    stream=True,
-                )
-                for chunk in stream:
-                    delta = chunk.choices[0].delta.content or ""
-                    if delta:
-                        yield delta
-                return
             elif settings.ENVIRONMENT == "production":
-                raise RuntimeError(f"Configured LLM provider '{self.provider}' client is not initialized in production.")
+                raise RuntimeError("Groq LLM client is not initialized in production.")
         except Exception as e:
             if settings.ENVIRONMENT == "production":
                 raise RuntimeError(f"LLM streaming service failed: {str(e)}") from e
