@@ -304,4 +304,26 @@ To meet the stringent accuracy demands of wealth management and compliance advis
    - Strict confidence preservation: boosts relevant clauses without lowering semantic score below the deterministic $\ge 0.68$ gate.
    - Truncates context to the top $k=3\text{--}5$ highest-fidelity clauses.
 
+readme-update-7
 Guardrails are designed to refuse unsupported or ambiguous advice rather than inventing an answer.
+=======
+ readme-update-6
+Deployment guidance supports local development as well as production-ready service configuration.
+=======
+readme-update-2
+The architecture keeps tenant data isolated while preserving cumulative knowledge over time.
+=======
+readme-update-3
+Every generated response is designed to remain auditable through clause-level citations.
+=======
+ readme-update-5
+The system combines semantic search with reranking to surface the most relevant policy clauses.
+=======
+readme-update-4
+Approved documents remain the source of truth for retrieval, ranking, and answer generation.
+This project prioritizes traceable, policy-grounded answers for wealth management teams.
+
+
+
+
+
