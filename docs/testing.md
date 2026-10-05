@@ -17,7 +17,7 @@ WealthGuard AI operates in a high-consequence wealth advisory environment. The t
 # From workspace root
 backend\venv\Scripts\python.exe -m pytest backend/tests -v
 ```
-**Results**: 140 passed across 16 test modules in ~136s.
+Test counts and duration vary by branch and environment; use the current pytest output as the result for a run.
 
 ### 2.2 Security & Tenant Isolation Tests
 ```bash
@@ -36,12 +36,25 @@ backend\venv\Scripts\python.exe -m pytest backend/tests/test_confidence_gate.py 
 
 ### 2.4 Frontend Unit Tests & Build
 ```bash
-# Vitest Component & Store Tests (8 passed)
+# Vitest component and store tests
 npm --prefix frontend run test
 
-# Next.js 14 Production Standalone Build (0 errors across 11 routes)
+# Next.js production build
 npm --prefix frontend run build
 ```
+
+### 2.5 Backend Test Data Isolation
+
+The backend test fixtures replace the relational database with an in-memory SQLite database, set the application environment to `test`, disable rate limits, and seed test accounts for each test. ChromaDB is not replaced by that SQLite fixture: the setup clears IDs from the configured `wealthguard_chunks` collection before each test, and the final test can leave its vectors in that collection.
+
+Point tests at a disposable vector-store directory before starting pytest. In PowerShell, from the repository root:
+
+```powershell
+$env:VECTOR_DB_PATH = ".\data\chromadb-test"
+backend\venv\Scripts\python.exe -m pytest backend/tests -v
+```
+
+Do not run the suite with `VECTOR_DB_PATH` or `CHROMA_PERSIST_DIR` pointed at a development corpus, shared store, or production data. The fixture deletes collection entries; it does not back up or restore them.
 
 ---
 
