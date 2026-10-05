@@ -304,3 +304,4 @@ To meet the stringent accuracy demands of wealth management and compliance advis
    - Strict confidence preservation: boosts relevant clauses without lowering semantic score below the deterministic $\ge 0.68$ gate.
    - Truncates context to the top $k=3\text{--}5$ highest-fidelity clauses.
 
+Deployment guidance supports local development as well as production-ready service configuration.
