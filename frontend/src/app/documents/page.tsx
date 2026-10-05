@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { fetchDocuments, deleteDocumentFile, DocumentItem } from "@/lib/api";
+import { fetchDocuments, deleteDocumentFile, downloadDocumentPdf, DocumentItem } from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import DocumentUploadModal from "@/components/DocumentUploadModal";
 
@@ -333,20 +333,7 @@ export default function DocumentsPage() {
                             onClick={async () => {
                               if (!token) return;
                               try {
-                                const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-                                const res = await fetch(`${API_BASE}/api/v1/documents/${doc.id}/export-pdf`, {
-                                  headers: { Authorization: `Bearer ${token}` }
-                                });
-                                if (!res.ok) throw new Error("Failed to download PDF summary");
-                                const blob = await res.blob();
-                                const url = window.URL.createObjectURL(blob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                a.download = `GAA_Summary_${doc.filename.replace(/\.pdf$/i, "")}.pdf`;
-                                document.body.appendChild(a);
-                                a.click();
-                                a.remove();
-                                window.URL.revokeObjectURL(url);
+                                await downloadDocumentPdf(token, doc.id, doc.filename);
                               } catch (err: any) {
                                 alert(err.message || "Failed to download PDF");
                               }

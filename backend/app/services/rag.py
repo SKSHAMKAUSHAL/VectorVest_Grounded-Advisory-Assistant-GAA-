@@ -32,6 +32,36 @@ REFUSAL_MESSAGE = (
     "uploaded documentation. Please escalate this request to the Compliance and Legal Department."
 )
 
+HELP_MESSAGE = (
+    "Hello! I am WealthGuard AI, your Grounded Advisory Assistant (GAA) for private wealth management, banking compliance, and advisory support.\n\n"
+    "Here is how I can assist you:\n"
+    "• Policy & Compliance Guidance: Provide verified answers on bank advisory policies, regulatory circulars, and product term sheets.\n"
+    "• Product & Fee Inquiries: Look up management fee caps, liquidity terms, and eligibility rules for discretionary portfolios and debt funds.\n"
+    "• Tax & Investment Rules: Explain capital gains tax offsets, municipal bond rules, and non-resident (NRI) investment treatments.\n"
+    "• Verifiable Clause Citations: Every factual answer is strictly grounded in bank documentation with clickable clause badges pointing to verified documents.\n\n"
+    "You can try asking:\n"
+    "1. 'What is the capital gains tax offset for municipal bonds under 2024 rules?'\n"
+    "2. 'Management fee caps and liquidity terms for Level-A discretionary portfolios'\n"
+    "3. 'Can non-resident individuals (NRIs) invest in High-Yield Debt Funds?'\n"
+    "4. 'What is the early redemption penalty for Tier-1 bonds?'"
+)
+
+import re
+
+_CAPABILITY_PATTERNS = [
+    r"\bhow can you help\b",
+    r"\bhow do you help\b",
+    r"\bwhat can you do\b",
+    r"\bwhat do you do\b",
+    r"\bwho are you\b",
+    r"\bwhat is (this|wealthguard|gaa)\b",
+    r"\bwhat questions can i ask\b",
+    r"\bwhat can i ask\b",
+    r"\bhow to use\b",
+    r"^\s*help\s*$",
+    r"^\s*(hello|hi|hey|greetings|good morning|good afternoon|good evening)\b",
+]
+
 # Pronoun / deixis patterns that indicate a follow-up needs context injection
 _REFERENTIAL_TOKENS = frozenset([
     "it", "its", "they", "them", "their", "this", "that", "these", "those",
@@ -181,6 +211,11 @@ class RAGPipeline:
 
         return result
 
+    def is_capability_query(self, query: str) -> bool:
+        """Detects whether a user prompt is asking about capabilities, help, or a greeting."""
+        q_clean = query.lower().strip()
+        return any(re.search(pattern, q_clean) for pattern in _CAPABILITY_PATTERNS)
+
     def retrieve_and_evaluate(
         self,
         query: str,
@@ -196,6 +231,19 @@ class RAGPipeline:
         3. Threshold confidence check (>= 0.68).
         4. Structured citation assembly.
         """
+        # 0. Check for capability inquiry or greeting
+        if self.is_capability_query(query):
+            return {
+                "decision": "CAPABILITY",
+                "message": HELP_MESSAGE,
+                "citations": [],
+                "top_score": 1.0,
+                "rewritten_query": query.strip(),
+                "retrieved_chunk_ids": [],
+                "context": "",
+                "is_refusal": False,
+            }
+
         chat_history = chat_history or []
         rewritten_query = self.rewrite_query(query, chat_history)
 

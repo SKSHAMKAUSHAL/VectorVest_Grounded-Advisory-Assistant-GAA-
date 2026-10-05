@@ -114,6 +114,32 @@ async def chat_query_stream(
             )
             return
 
+        if eval_result["decision"] == "CAPABILITY":
+            help_text = eval_result["message"]
+            words = help_text.split(" ")
+            for i, word in enumerate(words):
+                token = word + (" " if i < len(words) - 1 else "")
+                yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
+                accumulated_text.append(token)
+                await asyncio.sleep(0.01)
+
+            yield f"event: citations\ndata: {json.dumps([])}\n\n"
+            yield "event: done\ndata: [DONE]\n\n"
+
+            latency = int((time.time() - start_time) * 1000)
+            record_audit_log(
+                account_id=current_user.account_id,
+                user_id=current_user.id,
+                query=request.query,
+                rewritten_query=eval_result["rewritten_query"],
+                chunk_ids=[],
+                score=1.0,
+                response_text=help_text,
+                is_refusal=False,
+                latency_ms=latency,
+            )
+            return
+
         # Generation Path
         try:
             system_prompt, user_prompt = rag_pipeline.build_generation_prompts(
@@ -200,6 +226,10 @@ def chat_query_sync(
     if eval_result["decision"] == "REFUSAL":
         response_text = eval_result["message"]
         is_refusal = True
+        citations = []
+    elif eval_result["decision"] == "CAPABILITY":
+        response_text = eval_result["message"]
+        is_refusal = False
         citations = []
     else:
         system_prompt, user_prompt = rag_pipeline.build_generation_prompts(

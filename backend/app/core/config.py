@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     @property
     def chroma_effective_dir(self) -> str:
         """Returns the effective vector store persistence path."""
+        if os.environ.get("VERCEL"):
+            return "/tmp/chromadb"
         return self.VECTOR_DB_PATH or self.CHROMA_PERSIST_DIR
 
     @property
