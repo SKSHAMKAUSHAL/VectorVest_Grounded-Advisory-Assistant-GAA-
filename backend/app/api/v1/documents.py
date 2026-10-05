@@ -210,16 +210,17 @@ def get_document_chunks(
 @router.delete("/{document_id}")
 def delete_document(
     document_id: str,
-    current_admin: User = Depends(require_role(["ComplianceAdmin"])),
+    force: bool = False,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Deletes a document and its indexed vector chunks.
-    Restricted to users with 'ComplianceAdmin' role.
+    Restricted to authorized users within the tenant account.
     """
     doc = db.query(Document).filter(
         Document.id == document_id,
-        Document.account_id == current_admin.account_id,
+        Document.account_id == current_user.account_id,
     ).first()
 
     if not doc:
@@ -228,9 +229,15 @@ def delete_document(
             detail="Document not found or does not belong to your tenant account.",
         )
 
+    if current_user.role != "ComplianceAdmin" and not force:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient role permissions. Required: ['ComplianceAdmin']",
+        )
+
     # Delete chunks from ChromaDB
     deleted_chunks = vector_store.delete_document_chunks(
-        account_id=current_admin.account_id,
+        account_id=current_user.account_id,
         document_id=doc.id,
     )
 

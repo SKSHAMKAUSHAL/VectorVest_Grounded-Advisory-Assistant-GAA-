@@ -28,7 +28,10 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["'Work Sans'", "'Montserrat'", "system-ui", "sans-serif"],
+        heading: ["'Montserrat'", "'Work Sans'", "sans-serif"],
+        condensed: ["'Barlow Condensed'", "sans-serif"],
+        display: ["'Momo Trust Display'", "'Montserrat'", "sans-serif"],
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",

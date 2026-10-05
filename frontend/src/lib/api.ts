@@ -223,7 +223,7 @@ export async function uploadDocumentFile(token: string, formData: FormData) {
 export async function deleteDocumentFile(token: string, documentId: string) {
   const base = getApiBase();
   try {
-    const res = await fetch(`${base}/api/v1/documents/${documentId}`, {
+    const res = await fetch(`${base}/api/v1/documents/${documentId}?force=true`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });

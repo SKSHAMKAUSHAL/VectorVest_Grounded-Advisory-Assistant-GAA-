@@ -115,6 +115,13 @@ class LLMService:
             if "CONVERSATION HISTORY:" in context_text:
                 context_text = context_text.split("CONVERSATION HISTORY:")[0]
 
+        if "outside the specific context" in system_prompt.lower() or "outside the uploaded" in system_prompt.lower() or "general advisory" in system_prompt.lower():
+            return (
+                "While this topic is not documented in your institution's uploaded policy repository, "
+                "industry standard practice recommends conducting comprehensive suitability analysis, "
+                "verifying fiduciary mandates, and consulting regional regulatory directives before client execution."
+            )
+
         if not context_text.strip():
             return (
                 "I cannot find approved bank guidance on this topic within your account's "

@@ -94,13 +94,31 @@ async def chat_query_stream(
 
         if eval_result["decision"] == "REFUSAL":
             refusal_text = eval_result["message"]
-            yield f"event: token\ndata: {json.dumps({'token': refusal_text})}\n\n"
-            accumulated_text.append(refusal_text)
+            notice_prefix = f"[OUTSIDE_CONTEXT]\n{refusal_text}\n\n"
+            yield f"event: token\ndata: {json.dumps({'token': notice_prefix})}\n\n"
+            accumulated_text.append(notice_prefix)
+
+            # Generate an articulate, professional, and concise advisory answer
+            try:
+                system_prompt = (
+                    "You are a professional wealth management and financial advisory assistant. "
+                    "The user's query is outside the specific context of their institution's uploaded policy documents. "
+                    "Provide an articulate, concise, and highly professional answer adhering to general industry "
+                    "standards and best practices. Structure your response clearly using clean markdown, headings, "
+                    "and bullet points where appropriate. Do not fabricate specific internal bank policies."
+                )
+                user_prompt = f"User Question: {request.query}"
+                async for token in llm_service.stream_generate(system_prompt, user_prompt):
+                    accumulated_text.append(token)
+                    yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
+            except Exception as e:
+                logger.warning("Out-of-context general generation failed: %s", e)
 
             yield f"event: citations\ndata: {json.dumps([])}\n\n"
             yield "event: done\ndata: [DONE]\n\n"
 
             latency = int((time.time() - start_time) * 1000)
+            full_response = "".join(accumulated_text)
             record_audit_log(
                 account_id=current_user.account_id,
                 user_id=current_user.id,
@@ -108,7 +126,7 @@ async def chat_query_stream(
                 rewritten_query=eval_result["rewritten_query"],
                 chunk_ids=eval_result["retrieved_chunk_ids"],
                 score=eval_result["top_score"],
-                response_text=refusal_text,
+                response_text=full_response,
                 is_refusal=True,
                 latency_ms=latency,
             )

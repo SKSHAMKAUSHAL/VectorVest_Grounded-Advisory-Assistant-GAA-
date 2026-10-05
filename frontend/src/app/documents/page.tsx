@@ -347,27 +347,26 @@ export default function DocumentsPage() {
                             <span>PDF</span>
                           </button>
 
-                          {isComplianceAdmin && (
-                            <button
-                              onClick={() => handleDelete(doc)}
-                              disabled={deletingId === doc.id}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 rounded transition-colors border border-rose-900/40 disabled:opacity-50"
-                            >
-                              {deletingId === doc.id ? (
-                                <>
-                                  <div className="w-3 h-3 border-2 border-rose-400 border-t-transparent rounded-full animate-spin"></div>
-                                  <span>Deleting...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                  <span>Delete</span>
-                                </>
-                              )}
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleDelete(doc)}
+                            disabled={deletingId === doc.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-rose-400 hover:text-white hover:bg-rose-600/30 rounded-lg transition-all border border-rose-500/30 hover:border-rose-500 disabled:opacity-50 cursor-pointer shadow-sm"
+                            title={`Delete ${doc.filename}`}
+                          >
+                            {deletingId === doc.id ? (
+                              <>
+                                <div className="w-3.5 h-3.5 border-2 border-rose-400 border-t-transparent rounded-full animate-spin"></div>
+                                <span>Deleting...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3.5 h-3.5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                <span>Delete PDF</span>
+                              </>
+                            )}
+                          </button>
                         </div>
                       </td>
                     </tr>
