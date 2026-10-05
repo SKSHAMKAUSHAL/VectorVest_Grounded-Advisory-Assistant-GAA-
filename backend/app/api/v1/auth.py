@@ -88,10 +88,20 @@ def signup(
     target_account = request.account_id or "branch_12_central"
     account = db.query(Account).filter(Account.id == target_account).first()
     if not account:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Specified branch account does not exist.",
-        )
+        if target_account in ("branch_12_central", "default"):
+            account = Account(
+                id=target_account,
+                branch_name="Central Wealth Advisory Branch #12",
+                branch_code="BR-CENTRAL-12",
+            )
+            db.add(account)
+            db.commit()
+            db.refresh(account)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Specified branch account does not exist.",
+            )
 
     user_id = f"usr_{uuid.uuid4().hex[:12]}"
     new_user = User(

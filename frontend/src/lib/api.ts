@@ -1,4 +1,21 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export function getApiBase(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1") {
+      return "";
+    }
+    return "http://localhost:8000";
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return "http://localhost:8000";
+}
+
+export const API_BASE = getApiBase();
 
 export interface Citation {
   document_name: string;
@@ -276,4 +293,21 @@ export async function streamChatResponse(
   } catch (err: any) {
     onError(err);
   }
+}
+
+export async function downloadDocumentPdf(token: string, documentId: string, filename: string) {
+  const base = getApiBase();
+  const res = await fetch(`${base}/api/v1/documents/${documentId}/export-pdf`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error("Failed to download PDF summary");
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `GAA_Summary_${filename.replace(/\.pdf$/i, "")}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }

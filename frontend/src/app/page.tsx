@@ -31,6 +31,7 @@ export default function ChatPage() {
   const { user, token, isLoading } = useAuth();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [hasMounted, setHasMounted] = useState(false);
   const [inputQuery, setInputQuery] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
@@ -44,9 +45,37 @@ export default function ChatPage() {
     }
   }, [isLoading, token, router]);
 
+  // Load chat history safely on mount (avoiding SSR empty overwrite)
   useEffect(() => {
+    if (!user) return;
+    try {
+      const key = `gaa_chat_history_${user.id}`;
+      const saved = localStorage.getItem(key) || localStorage.getItem("gaa_chat_history");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse saved chat history:", e);
+    }
+    setHasMounted(true);
+  }, [user]);
+
+  // Persist chat history only AFTER initial mount has finished and messages are loaded
+  useEffect(() => {
+    if (!hasMounted || !user) return;
+    try {
+      const key = `gaa_chat_history_${user.id}`;
+      const toSave = messages.filter((m) => m.content && m.content.trim().length > 0);
+      localStorage.setItem(key, JSON.stringify(toSave));
+      localStorage.setItem("gaa_chat_history", JSON.stringify(toSave));
+    } catch (e) {
+      console.error("Failed to save chat history:", e);
+    }
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isGenerating]);
+  }, [messages, isGenerating, hasMounted, user]);
 
   if (isLoading || !user) {
     return (
@@ -67,7 +96,10 @@ export default function ChatPage() {
     setInputQuery("");
     setIsGenerating(true);
 
-    const historyPayload = messages.map((m) => ({ role: m.role, content: m.content }));
+    const historyPayload = messages
+      .filter((m) => m.content && m.content.trim().length > 0)
+      .slice(-20)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     let streamedContent = "";
 
@@ -221,7 +253,26 @@ export default function ChatPage() {
               </div>
             </div>
           ) : (
-            messages.map((msg, index) => {
+            <>
+              <div className="flex justify-end pb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessages([]);
+                    if (typeof window !== "undefined") {
+                      if (user) {
+                        localStorage.removeItem(`gaa_chat_history_${user.id}`);
+                      }
+                      localStorage.removeItem("gaa_chat_history");
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-white/5 transition-all"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Clear Conversation History
+                </button>
+              </div>
+              {messages.map((msg, index) => {
               const isUser = msg.role === "user";
               const isRefusal = msg.isRefusal;
 
@@ -260,8 +311,9 @@ export default function ChatPage() {
                   </div>
                 </div>
               );
-            })
-          )}
+            })}
+          </>
+        )}
 
           {isGenerating && messages[messages.length - 1]?.content === "" && (
             <div className="flex items-center gap-3">

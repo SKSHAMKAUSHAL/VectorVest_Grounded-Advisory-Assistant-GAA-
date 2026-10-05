@@ -143,11 +143,12 @@ export default function AuthModule({ initialTab = "signin" }: AuthModuleProps) {
     setServerError(null);
     setSuccessMessage(null);
     try {
-      await login(data.email, data.password);
+      const cleanEmail = data.email.trim().toLowerCase();
+      await login(cleanEmail, data.password);
       setSuccessMessage("Authentication verified. Redirecting to advisory workspace...");
       setTimeout(() => {
-        router.push("/");
-      }, 600);
+        window.location.href = "/";
+      }, 500);
     } catch (err: any) {
       setServerError(err.message || "Invalid email or password");
     }
@@ -158,11 +159,13 @@ export default function AuthModule({ initialTab = "signin" }: AuthModuleProps) {
     setServerError(null);
     setSuccessMessage(null);
     try {
-      await signup(data.fullName, data.email, data.password);
+      const cleanEmail = data.email.trim().toLowerCase();
+      await signup(data.fullName.trim(), cleanEmail, data.password);
+      setValueSignIn("email", cleanEmail);
       setSuccessMessage("Account created successfully! Redirecting to advisory workspace...");
       setTimeout(() => {
-        router.push("/");
-      }, 800);
+        window.location.href = "/";
+      }, 500);
     } catch (err: any) {
       setServerError(err.message || "Registration failed. Please try again.");
     }
@@ -346,54 +349,7 @@ export default function AuthModule({ initialTab = "signin" }: AuthModuleProps) {
                 <p className="text-xs text-slate-400">Enter your institutional credentials to access the bank policy copilot.</p>
               </div>
 
-              {/* Social Login Options */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setServerError("Institutional Single Sign-On (Google Workspace) enabled in enterprise tier.")}
-                  className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all text-xs font-medium text-slate-300"
-                  aria-label="Continue with Google"
-                >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24">
-                    <path
-                      fill="#EA4335"
-                      d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.3l3.7 2.9C6.2 7.3 8.9 5 12 5z"
-                    />
-                    <path
-                      fill="#4285F4"
-                      d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.3 14.8c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3L1.6 7.3C.6 9.3 0 10.6 0 12.5s.6 3.2 1.6 5.2l3.7-2.9z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.2L1.6 17c1.9 3.7 5.8 7 10.4 7z"
-                    />
-                  </svg>
-                  <span>Google</span>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => setServerError("Apple ID federated login available on corporate enrolled macOS profiles.")}
-                  className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all text-xs font-medium text-slate-300"
-                  aria-label="Continue with Apple"
-                >
-                  <svg className="h-4 w-4 fill-current text-white" viewBox="0 0 24 24">
-                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.87c.66-.82 1.11-1.96.99-3.1-.96.04-2.12.64-2.8 1.44-.6.69-1.12 1.83-.98 2.94 1.07.08 2.15-.55 2.79-1.28z" />
-                  </svg>
-                  <span>Apple</span>
-                </button>
-              </div>
-
-              <div className="relative flex items-center justify-center my-3">
-                <div className="border-t border-white/10 w-full" />
-                <span className="bg-navy-900 px-3 text-[11px] text-slate-400 uppercase tracking-wider absolute">
-                  Or corporate email
-                </span>
-              </div>
 
               <form onSubmit={handleSubmitSignIn(onSignInSubmit)} className="space-y-4" noValidate>
                 {/* Email Field */}
@@ -561,54 +517,7 @@ export default function AuthModule({ initialTab = "signin" }: AuthModuleProps) {
                 <p className="text-xs text-slate-400">Register a new Relationship Manager profile on the central branch.</p>
               </div>
 
-              {/* Social Sign-Up Options */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setServerError("Google OAuth registration requires branch administrator approval.")}
-                  className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all text-xs font-medium text-slate-300"
-                  aria-label="Sign up with Google"
-                >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24">
-                    <path
-                      fill="#EA4335"
-                      d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.3l3.7 2.9C6.2 7.3 8.9 5 12 5z"
-                    />
-                    <path
-                      fill="#4285F4"
-                      d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.3 14.8c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3L1.6 7.3C.6 9.3 0 10.6 0 12.5s.6 3.2 1.6 5.2l3.7-2.9z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.2L1.6 17c1.9 3.7 5.8 7 10.4 7z"
-                    />
-                  </svg>
-                  <span>Google</span>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => setServerError("Apple Sign-Up available on approved corporate hardware.")}
-                  className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all text-xs font-medium text-slate-300"
-                  aria-label="Sign up with Apple"
-                >
-                  <svg className="h-4 w-4 fill-current text-white" viewBox="0 0 24 24">
-                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.87c.66-.82 1.11-1.96.99-3.1-.96.04-2.12.64-2.8 1.44-.6.69-1.12 1.83-.98 2.94 1.07.08 2.15-.55 2.79-1.28z" />
-                  </svg>
-                  <span>Apple</span>
-                </button>
-              </div>
-
-              <div className="relative flex items-center justify-center my-3">
-                <div className="border-t border-white/10 w-full" />
-                <span className="bg-navy-900 px-3 text-[11px] text-slate-400 uppercase tracking-wider absolute">
-                  Or manual registration
-                </span>
-              </div>
 
               <form onSubmit={handleSubmitSignUp(onSignUpSubmit)} className="space-y-3.5" noValidate>
                 {/* Full Name */}

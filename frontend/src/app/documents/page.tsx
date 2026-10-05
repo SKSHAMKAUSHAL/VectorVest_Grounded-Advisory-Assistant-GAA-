@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { fetchDocuments, deleteDocumentFile, DocumentItem } from "@/lib/api";
+import { fetchDocuments, deleteDocumentFile, downloadDocumentPdf, DocumentItem } from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import DocumentUploadModal from "@/components/DocumentUploadModal";
 
@@ -326,31 +326,49 @@ export default function DocumentsPage() {
                           )}
                         </div>
                       </td>
-
                       <td className="py-4 px-4 whitespace-nowrap text-right">
-                        {isComplianceAdmin ? (
+                        <div className="inline-flex items-center gap-2 justify-end">
                           <button
-                            onClick={() => handleDelete(doc)}
-                            disabled={deletingId === doc.id}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 rounded transition-colors border border-rose-900/40 disabled:opacity-50"
+                            type="button"
+                            onClick={async () => {
+                              if (!token) return;
+                              try {
+                                await downloadDocumentPdf(token, doc.id, doc.filename);
+                              } catch (err: any) {
+                                alert(err.message || "Failed to download PDF");
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gold-400 hover:text-gold-200 hover:bg-gold-950/40 rounded transition-colors border border-gold-500/30"
+                            title="Export verified policy summary PDF"
                           >
-                            {deletingId === doc.id ? (
-                              <>
-                                <div className="w-3 h-3 border-2 border-rose-400 border-t-transparent rounded-full animate-spin"></div>
-                                <span>Deleting...</span>
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                <span>Delete</span>
-                              </>
-                            )}
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>PDF</span>
                           </button>
-                        ) : (
-                          <span className="text-xs text-slate-500 italic">Read-only (RM)</span>
-                        )}
+
+                          {isComplianceAdmin && (
+                            <button
+                              onClick={() => handleDelete(doc)}
+                              disabled={deletingId === doc.id}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 rounded transition-colors border border-rose-900/40 disabled:opacity-50"
+                            >
+                              {deletingId === doc.id ? (
+                                <>
+                                  <div className="w-3 h-3 border-2 border-rose-400 border-t-transparent rounded-full animate-spin"></div>
+                                  <span>Deleting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                  <span>Delete</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

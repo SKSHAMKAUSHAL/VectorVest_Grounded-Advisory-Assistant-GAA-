@@ -41,6 +41,12 @@ async def lifespan(app: FastAPI):
 
     # Initialize database tables on startup (in dev/test)
     Base.metadata.create_all(bind=engine)
+    try:
+        from app.seed import seed_database
+        seed_database()
+    except Exception as e:
+        import logging
+        logging.getLogger("app.main").warning(f"Seed step encountered: {e}")
     yield
 
 app = FastAPI(
@@ -64,20 +70,44 @@ async def add_security_headers(request: Request, call_next):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
     return response
 
-# Configure CORS with strict origin controls
+# Configure CORS with strict origin controls and support for Vercel preview/production domains
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list or ["http://localhost:3000"],
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Mount API Routers
+# Mount API Routers under /api/v1 (standard) and /v1 (serverless rewrite alias)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(documents_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
+
+app.include_router(auth_router, prefix="/v1")
+app.include_router(documents_router, prefix="/v1")
+app.include_router(chat_router, prefix="/v1")
+app.include_router(audit_router, prefix="/v1")
+
+@app.get("/", tags=["System"])
+def root():
+    return {
+        "status": "online",
+        "service": settings.PROJECT_NAME,
+        "docs_url": "/docs",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+@app.get("/api", tags=["System"])
+def api_root():
+    return {
+        "status": "online",
+        "service": settings.PROJECT_NAME,
+        "version": "v1",
+        "endpoints": ["/api/v1/auth", "/api/v1/documents", "/api/v1/chat", "/api/v1/audit"],
+    }
 
 @app.get("/health", tags=["System"])
 def health_check():
