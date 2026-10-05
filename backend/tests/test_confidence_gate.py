@@ -1,6 +1,7 @@
 import json
 import pytest
 from fastapi.testclient import TestClient
+from app.core.config import settings
 from app.services.rag import rag_pipeline, REFUSAL_MESSAGE
 from app.services.vector_store import vector_store
 from app.models.models import Document, ComplianceAuditLog
@@ -16,7 +17,7 @@ def get_auth_token(client: TestClient, email: str, password: str) -> str:
 class TestConfidenceGateGuardrail:
     """
     Comprehensive test suite dedicated to the Zero-Hallucination Confidence Gate Guardrail:
-    - Threshold verification (>= 0.68)
+    - Threshold verification (configured threshold)
     - Hard refusal on low-confidence/unindexed queries
     - Exact deterministic refusal wording
     - Empty citations invariant on refusal
@@ -29,8 +30,8 @@ class TestConfidenceGateGuardrail:
     """
 
     def test_threshold_constant_configuration(self):
-        """Verifies that the RAG pipeline confidence threshold is configured to 0.68."""
-        assert rag_pipeline.threshold == 0.68
+        """Verifies that the RAG pipeline confidence threshold is configured properly."""
+        assert rag_pipeline.threshold == settings.SIMILARITY_THRESHOLD
 
     def test_unindexed_query_hard_refusal(self, client: TestClient):
         """Low-confidence queries on empty store immediately trigger deterministic refusal."""

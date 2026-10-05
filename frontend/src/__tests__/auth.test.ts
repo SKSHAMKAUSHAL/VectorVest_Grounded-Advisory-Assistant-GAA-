@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { signInSchema, signUpSchema } from "../components/AuthModule";
 
 describe("Authentication Form Validation Unit Tests", () => {

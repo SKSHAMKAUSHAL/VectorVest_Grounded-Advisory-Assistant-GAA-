@@ -62,6 +62,7 @@ yarn-error.log*
 frontend/.next/
 out/
 .turbo/
+*.tsbuildinfo
 
 # Logs & Temporary Files
 *.log
