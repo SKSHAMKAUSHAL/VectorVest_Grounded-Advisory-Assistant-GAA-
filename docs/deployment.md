@@ -86,6 +86,14 @@ All services (`gaa_postgres`, `gaa_backend`, `gaa_frontend`) should report `heal
 - `gaa_backend` exposes port `8000` to the host/reverse proxy.
 - `gaa_frontend` exposes port `3000` to the host/reverse proxy.
 
+### 4.4 Persistent Data and Safe Teardown
+
+Docker Compose stores relational data, uploaded documents, and ChromaDB files in the named volumes `gaa_postgres_data`, `gaa_backend_uploads`, and `gaa_backend_chroma`. Rebuilding or recreating containers does not remove these volumes.
+
+Use `docker compose down` to stop and remove the stack while retaining its named volumes. Avoid `docker compose down --volumes` for routine maintenance: it deletes the Compose-managed volumes and permanently removes the database, uploaded files, and local vector index unless they have been backed up.
+
+Before a planned data reset or migration, run the repository backup script (`scripts/backup.ps1` on Windows or `scripts/backup.sh` on Linux/macOS). Keep the resulting database dump and volume archives outside the Docker volumes being changed, and verify a restore in a separate environment before relying on the backup for recovery.
+
 ---
 
 ## 5. Database Migrations (Alembic)
