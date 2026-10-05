@@ -41,6 +41,12 @@ async def lifespan(app: FastAPI):
 
     # Initialize database tables on startup (in dev/test)
     Base.metadata.create_all(bind=engine)
+    try:
+        from app.seed import seed_database
+        seed_database()
+    except Exception as e:
+        import logging
+        logging.getLogger("app.main").warning(f"Seed step encountered: {e}")
     yield
 
 app = FastAPI(

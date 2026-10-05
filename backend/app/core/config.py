@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # LLM & Embeddings
     LLM_PROVIDER: str = "groq"
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.1-70b-versatile"
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
     OPENAI_API_KEY: str = ""
     OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"

@@ -30,7 +30,17 @@ export default function ChatPage() {
   const router = useRouter();
   const { user, token, isLoading } = useAuth();
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gaa_chat_history");
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse saved chat history:", e);
+      }
+    }
+    return [];
+  });
   const [inputQuery, setInputQuery] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
@@ -45,6 +55,13 @@ export default function ChatPage() {
   }, [isLoading, token, router]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("gaa_chat_history", JSON.stringify(messages));
+      } catch (e) {
+        console.error("Failed to save chat history:", e);
+      }
+    }
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isGenerating]);
 
@@ -221,7 +238,23 @@ export default function ChatPage() {
               </div>
             </div>
           ) : (
-            messages.map((msg, index) => {
+            <>
+              <div className="flex justify-end pb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessages([]);
+                    if (typeof window !== "undefined") {
+                      localStorage.removeItem("gaa_chat_history");
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-white/5 transition-all"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Clear Conversation History
+                </button>
+              </div>
+              {messages.map((msg, index) => {
               const isUser = msg.role === "user";
               const isRefusal = msg.isRefusal;
 
@@ -260,8 +293,9 @@ export default function ChatPage() {
                   </div>
                 </div>
               );
-            })
-          )}
+            })}
+          </>
+        )}
 
           {isGenerating && messages[messages.length - 1]?.content === "" && (
             <div className="flex items-center gap-3">
