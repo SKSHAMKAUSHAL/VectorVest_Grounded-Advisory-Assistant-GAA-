@@ -95,6 +95,12 @@ A thread-safe in-memory sliding-window rate limiter is applied to sensitive endp
 
 Clients exceeding limits receive `429 Too Many Requests` with a `Retry-After` header.
 
+### 6.1 Deployment Boundaries
+
+The application limiter stores counters in process memory. Each backend worker or replica therefore maintains its own counters, and restarting a process clears its counters; this is not a deployment-wide quota. For multi-worker or multi-replica deployments, enforce shared limits at a gateway or use a shared rate-limiting service rather than relying on this in-memory limiter alone.
+
+The limiter identifies clients from `X-Forwarded-For`, then `X-Real-IP`, then the direct connection address. A reverse proxy must remove untrusted incoming forwarding headers and set the client address itself. Restrict direct access to the backend when proxy-provided addresses are part of the security boundary.
+
 ---
 
 ## 7. HTTP Security Headers
