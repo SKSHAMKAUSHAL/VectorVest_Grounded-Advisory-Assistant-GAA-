@@ -7,10 +7,12 @@ backend_dir = Path(__file__).resolve().parent.parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-# Configure serverless ephemeral storage for ChromaDB
+# Configure serverless ephemeral storage for ChromaDB and SQLite fallback
 if os.environ.get("VERCEL"):
     os.environ.setdefault("CHROMA_PERSIST_DIR", "/tmp/chromadb")
     os.environ.setdefault("VECTOR_DB_PATH", "/tmp/chromadb")
+    if not os.environ.get("DATABASE_URL"):
+        os.environ["DATABASE_URL"] = "sqlite:////tmp/app.db"
 
 from app.main import app
 

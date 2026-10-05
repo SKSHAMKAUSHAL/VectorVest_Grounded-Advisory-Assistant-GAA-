@@ -50,6 +50,15 @@ class Settings(BaseSettings):
         return self.VECTOR_DB_PATH or self.CHROMA_PERSIST_DIR
 
     @property
+    def effective_database_url(self) -> str:
+        """Returns the effective database connection URL, adjusting for serverless environments."""
+        if os.environ.get("VERCEL") and (
+            not self.DATABASE_URL or self.DATABASE_URL.startswith("sqlite:///./data")
+        ):
+            return "sqlite:////tmp/app.db"
+        return self.DATABASE_URL
+
+    @property
     def cors_origins_list(self) -> List[str]:
         raw_origins = self.ALLOWED_ORIGINS or self.CORS_ORIGINS
         origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
