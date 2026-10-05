@@ -83,9 +83,18 @@ GAA/
 │   └── .env.local.example
 │
 ├── docs/
+│   ├── architecture-decisions.md
+│   ├── benchmark-report.md
+│   ├── deployment.md
+│   ├── documentation-index.md
+│   ├── environment.md
 │   ├── hld.md
+│   ├── implementation-gap-analysis.md
 │   ├── lld.md
-│   └── developer-guide.md
+│   ├── security.md
+│   ├── testing.md
+│   ├── threat-model.md
+│   └── VERCEL_DEPLOYMENT.md
 │
 ├── prompts/
 │   └── system_prompt.txt
@@ -415,6 +424,21 @@ frontend/src/app/audit/
 ```
 
 The audit functionality provides a dedicated area for reviewing application activity rather than mixing audit-related concerns into other application pages.
+
+## 12. Change Ownership and Review
+
+Use this map to find the implementation and its closest validation surface before making a change:
+
+| Change area | Primary location | Related validation or guidance |
+| --- | --- | --- |
+| API routes and request validation | `backend/app/api/v1/` and `backend/app/schemas/` | `backend/tests/` and [testing.md](testing.md) |
+| Retrieval, ingestion, and model-provider behavior | `backend/app/services/` | Relevant backend service tests and [testing.md](testing.md) |
+| Authentication, configuration, and persistence | `backend/app/core/` and `backend/app/models/` | Backend tests, [environment.md](environment.md), and [security.md](security.md) |
+| User interface and client API calls | `frontend/src/` | `frontend/src/__tests__/` and `frontend/e2e/` |
+| Runtime, deployment, or secret changes | Root configuration and deployment manifests | [deployment.md](deployment.md) and [environment.md](environment.md) |
+| System behavior or contributor guidance | `docs/` and `prompts/` | The relevant design, security, or testing guide |
+
+Before requesting review, check that the change stays within its intended area, update the closest tests when behavior changes, and revise the relevant guide when setup or operational expectations change. For changes affecting tenant scope, retrieval, citations, or refusal behavior, include the corresponding regression tests described in [testing.md](testing.md).
 
 ---
 
