@@ -1,28 +1,38 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Send,
   Sparkles,
   Shield,
-  ShieldAlert,
   FileText,
   Loader2,
   RefreshCw,
   AlertTriangle,
+  FileUp,
+  ArrowRight,
+  BookOpen,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { CitationBadge } from "@/components/CitationBadge";
 import { CitationDrawer } from "@/components/CitationDrawer";
 import { useAuth } from "@/lib/auth";
-import { streamChatResponse, Citation, ChatMessage } from "@/lib/api";
+import { streamChatResponse, Citation, ChatMessage, fetchDocuments } from "@/lib/api";
 
-const SUGGESTED_QUERIES = [
+const SUGGESTED_QUERIES_WITH_DOCS = [
   "What is the capital gains tax offset for municipal bonds under 2024 rules?",
   "Management fee caps and liquidity terms for Level-A discretionary portfolios",
   "Can non-resident individuals (NRIs) invest in High-Yield Debt Funds?",
   "What is the early redemption penalty for Tier-1 bonds?",
+];
+
+const SUGGESTED_QUERIES_ZERO_DOCS = [
+  "how can you help me ?",
+  "yyyoo??",
+  "How do I upload and manage policy documents?",
+  "What document formats and policy types are supported?",
 ];
 
 export default function ChatPage() {
@@ -31,6 +41,7 @@ export default function ChatPage() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasMounted, setHasMounted] = useState(false);
+  const [docCount, setDocCount] = useState<number | null>(null);
   const [inputQuery, setInputQuery] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
@@ -43,6 +54,18 @@ export default function ChatPage() {
       router.push("/login");
     }
   }, [isLoading, token, router]);
+
+  // Query tenant document count on load to detect zero-document state
+  useEffect(() => {
+    if (!token) return;
+    fetchDocuments(token)
+      .then((res) => {
+        setDocCount(res.total ?? 0);
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch documents count:", err);
+      });
+  }, [token]);
 
   // Load chat history safely on mount
   useEffect(() => {
@@ -114,6 +137,7 @@ export default function ChatPage() {
           if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
             const isOutOfContext =
               streamedContent.includes("[OUTSIDE_CONTEXT]") ||
+              streamedContent.includes("[NO_DOCS_UPLOADED]") ||
               streamedContent.includes("I cannot find approved bank guidance on this topic") ||
               streamedContent.includes("Compliance and Legal Department");
             updated[lastIdx] = {
@@ -205,7 +229,14 @@ export default function ChatPage() {
 
   const renderFormattedMessage = (rawContent: string, citations?: Citation[], isRefusal?: boolean) => {
     let content = rawContent;
+    let isNoDocs = false;
     let isOutOfContext = isRefusal || false;
+
+    if (content.includes("[NO_DOCS_UPLOADED]")) {
+      isNoDocs = true;
+      isOutOfContext = true;
+      content = content.replace(/\[NO_DOCS_UPLOADED\]\s*/g, "");
+    }
 
     if (content.includes("[OUTSIDE_CONTEXT]")) {
       isOutOfContext = true;
@@ -361,11 +392,11 @@ export default function ChatPage() {
               <div className="flex items-center gap-2">
                 <span className="flex h-2.5 w-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
                 <span className="font-heading text-xs sm:text-sm font-bold uppercase tracking-wider text-rose-400">
-                  Not Related to Uploaded PDFs
+                  {isNoDocs ? "No PDFs Uploaded Yet — Grounding Inactive" : "Not Related to Uploaded PDFs — Out of Context"}
                 </span>
               </div>
               <span className="font-condensed text-[10px] sm:text-[11px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                General Advisory
+                {isNoDocs ? "Upload Required" : "Advisory Notice"}
               </span>
             </div>
 
@@ -373,9 +404,34 @@ export default function ChatPage() {
             <div className="h-0.5 w-full bg-gradient-to-r from-rose-500 via-rose-400/80 to-transparent my-1.5" />
 
             <p className="mt-1 text-xs sm:text-[12.5px] font-sans text-rose-200/90 leading-relaxed">
-              This topic is <strong className="text-white font-semibold">not covered in your institution&apos;s uploaded PDF documents</strong>. 
-              The following response provides articulate, professional advisory guidance synthesized from general industry wealth management frameworks.
+              {isNoDocs ? (
+                <>
+                  Your workspace currently has <strong className="text-white font-semibold">no policy PDF documents uploaded</strong>.
+                  Upload your institution&apos;s approved PDFs to enable verified clause citations and grounded answers.
+                </>
+              ) : (
+                <>
+                  This question is <strong className="text-white font-semibold">not related to or found in your uploaded PDF documents</strong>. 
+                  The response below is provided for conversational or general wealth advisory context.
+                </>
+              )}
             </p>
+
+            {isNoDocs && (
+              <div className="mt-3 pt-2.5 border-t border-rose-500/20 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] text-rose-300/80 font-sans">
+                  Ready to add your policy guidelines?
+                </span>
+                <Link
+                  href="/documents"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 text-navy-950 font-bold font-condensed text-xs uppercase tracking-wider transition-all shadow-md shadow-rose-950/40"
+                >
+                  <FileUp className="h-3.5 w-3.5" />
+                  <span>Go to Document Store &amp; Upload PDF</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
@@ -402,7 +458,7 @@ export default function ChatPage() {
                   setSelectedCitation(c);
                   setIsDrawerOpen(true);
                 }}
-                className="font-condensed rounded-full bg-white/5 hover:bg-gold-500/20 px-2.5 py-0.5 text-[11px] font-medium text-slate-300 hover:text-gold-300 border border-white/10 transition-colors tracking-wide"
+                className="font-condensed rounded-full bg-white/5 hover:bg-gold-500/20 px-2.5 py-0.5 text-[11px] font-medium text-slate-300 hover:text-gold-300 border border-white/10 transition-colors tracking-wide cursor-pointer"
               >
                 {c.document_name} ({c.clause_id})
               </button>
@@ -413,6 +469,9 @@ export default function ChatPage() {
     );
   };
 
+  const isZeroDocs = docCount === 0;
+  const suggestedQueries = isZeroDocs ? SUGGESTED_QUERIES_ZERO_DOCS : SUGGESTED_QUERIES_WITH_DOCS;
+
   return (
     <div className="min-h-screen flex flex-col bg-navy-950 font-sans selection:bg-gold-500 selection:text-navy-950">
       <Navbar />
@@ -421,31 +480,68 @@ export default function ChatPage() {
         {/* Chat History */}
         <div className="flex-1 overflow-y-auto space-y-4 pb-4 sm:pb-6 px-1 sm:px-2 scroll-smooth">
           {messages.length === 0 ? (
-            <div className="py-8 sm:py-12 text-center space-y-6 max-w-2xl mx-auto">
+            <div className="py-8 sm:py-10 text-center space-y-5 max-w-2xl mx-auto">
               <div className="inline-flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-gold-400 to-gold-600 shadow-2xl shadow-gold-500/20">
                 <Shield className="h-8 w-8 sm:h-9 sm:w-9 text-navy-950" />
               </div>
+
               <div className="space-y-2">
                 <h1 className="font-heading text-lg sm:text-2xl font-bold text-white tracking-tight">
                   Welcome to WealthGuard Advisory Terminal
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-400 leading-relaxed font-sans max-w-xl mx-auto">
-                  Ask complex wealth management policy, product, and tax queries. Every response is strictly grounded in verified documentation, with general advisory fallbacks when topics fall outside your indexed repository.
+                  Ask complex wealth management policy, product, and tax queries. When you ask questions covered by your PDFs, responses are strictly grounded with clause citations. General and external questions are highlighted with an advisory notice.
                 </p>
               </div>
 
+              {/* Zero-PDF Warning Card */}
+              {isZeroDocs && (
+                <div className="text-left rounded-2xl border border-gold-500/30 bg-gold-500/10 p-4 sm:p-5 shadow-lg backdrop-blur-md space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-gold-400 shrink-0" />
+                      <h3 className="font-heading font-bold text-white text-sm sm:text-base">
+                        No Policy PDFs Uploaded Yet
+                      </h3>
+                    </div>
+                    <span className="font-condensed text-[11px] font-semibold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-gold-500/20 text-gold-300 border border-gold-500/30">
+                      Setup Guide
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                    WealthGuard AI provides strictly grounded answers citing specific clauses from your uploaded documents. 
+                    Upload your institution&apos;s approved PDFs (e.g., investment mandates, fund factsheets, or tax circulars) to activate grounded Q&amp;A.
+                  </p>
+                  <div className="pt-1 flex flex-wrap items-center gap-3">
+                    <Link
+                      href="/documents"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-navy-950 font-bold font-condensed text-xs uppercase tracking-wider transition-all shadow-md shadow-gold-500/20 active:scale-95"
+                    >
+                      <FileUp className="h-4 w-4" />
+                      <span>Upload Your First PDF Document</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+              )}
+
               {/* Sample Queries */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left pt-2">
-                {SUGGESTED_QUERIES.map((sq, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSend(sq)}
-                    className="glass-card hover:bg-white/10 rounded-xl p-3 text-xs text-slate-300 hover:text-gold-300 border border-white/5 transition-all text-left flex items-start gap-2.5 group cursor-pointer"
-                  >
-                    <Sparkles className="h-4 w-4 text-gold-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
-                    <span className="leading-snug font-sans">{sq}</span>
-                  </button>
-                ))}
+              <div className="space-y-2 pt-1">
+                <span className="font-condensed text-[11px] uppercase tracking-wider text-slate-400 font-semibold block text-left px-1">
+                  {isZeroDocs ? "Try Starting With:" : "Suggested Advisory Inquiries:"}
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+                  {suggestedQueries.map((sq, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSend(sq)}
+                      className="glass-card hover:bg-white/10 rounded-xl p-3 text-xs text-slate-300 hover:text-gold-300 border border-white/5 transition-all text-left flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <Sparkles className="h-4 w-4 text-gold-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                      <span className="leading-snug font-sans">{sq}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
@@ -509,7 +605,7 @@ export default function ChatPage() {
               </div>
               <div className="glass-panel rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-[13px] text-slate-400 flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-gold-400" />
-                <span className="font-sans">Searching account knowledge store and generating response...</span>
+                <span className="font-sans">Searching knowledge store and generating response...</span>
               </div>
             </div>
           )}
@@ -530,7 +626,7 @@ export default function ChatPage() {
               type="text"
               value={inputQuery}
               onChange={(e) => setInputQuery(e.target.value)}
-              placeholder="Ask an advisory policy, tax rule, product eligibility question..."
+              placeholder="Ask a question about your uploaded PDFs, or general advisory questions..."
               disabled={isGenerating}
               className="flex-1 bg-transparent px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none font-sans"
             />
@@ -547,7 +643,7 @@ export default function ChatPage() {
             </button>
           </form>
           <div className="mt-1.5 sm:mt-2 text-center font-condensed text-[10px] sm:text-[11px] text-slate-500 uppercase tracking-wider">
-            Grounded in current-version documentation. External questions highlighted with advisory notice.
+            Grounded in current-version documentation. External questions highlighted with red line notice.
           </div>
         </div>
       </main>

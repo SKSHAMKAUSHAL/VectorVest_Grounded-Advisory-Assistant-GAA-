@@ -58,8 +58,10 @@ _CAPABILITY_PATTERNS = [
     r"\bwhat questions can i ask\b",
     r"\bwhat can i ask\b",
     r"\bhow to use\b",
+    r"\bhow (do|can) i (add|upload) (a )?pdf\b",
+    r"\bhow to (add|upload) (a )?pdf\b",
     r"^\s*help\s*$",
-    r"^\s*(hello|hi|hey|greetings|good morning|good afternoon|good evening)\b",
+    r"^\s*(hello|hi|hey|heyy+|greetings|good morning|good afternoon|good evening|yy+oo+|yo|what'?s up|sup)\b",
 ]
 
 # Pronoun / deixis patterns that indicate a follow-up needs context injection

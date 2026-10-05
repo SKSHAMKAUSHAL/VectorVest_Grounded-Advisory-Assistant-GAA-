@@ -115,7 +115,31 @@ class LLMService:
             if "CONVERSATION HISTORY:" in context_text:
                 context_text = context_text.split("CONVERSATION HISTORY:")[0]
 
+        if "conversational" in system_prompt.lower() or "friendly" in system_prompt.lower() or "how can you help" in user_prompt.lower():
+            if "how can you help" in user_prompt.lower():
+                return (
+                    "I am WealthGuard AI, your grounded wealth advisory assistant! I can help you clarify, search, "
+                    "and analyze any topics around the policy and tax PDFs you upload to your workspace. "
+                    "You can ask me specific questions about rules, clause numbers, and eligibility thresholds, "
+                    "or ask general wealth advisory guidance."
+                )
+            if any(k in user_prompt.lower() for k in ["yyyoo", "yo", "what's up", "whats up", "sup"]):
+                return "What's up! Ask me any questions if you want — I'm ready to help you explore your uploaded policy documents or discuss wealth advisory topics."
+            return (
+                "Hello! I am WealthGuard AI. I am here to help answer questions and clarify rules from "
+                "the policy PDFs uploaded to your workspace. How can I assist you today?"
+            )
+
         if "outside the specific context" in system_prompt.lower() or "outside the uploaded" in system_prompt.lower() or "general advisory" in system_prompt.lower():
+            if any(k in user_prompt.lower() for k in ["yyyoo", "yo", "what's up", "whats up", "sup"]):
+                return "What's up! Ask me any questions if you want — I'm ready to help you explore your uploaded policy documents or discuss wealth advisory topics."
+            if "how can you help" in user_prompt.lower():
+                return (
+                    "I am WealthGuard AI, your grounded wealth advisory assistant! I can help you clarify, search, "
+                    "and analyze any topics around the policy and tax PDFs you upload to your workspace. "
+                    "You can ask me specific questions about rules, clause numbers, and eligibility thresholds, "
+                    "or ask general wealth advisory guidance."
+                )
             return (
                 "While this topic is not documented in your institution's uploaded policy repository, "
                 "industry standard practice recommends conducting comprehensive suitability analysis, "

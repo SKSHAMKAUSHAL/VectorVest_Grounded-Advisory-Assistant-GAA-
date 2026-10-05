@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db, SessionLocal
 from app.core.config import settings
 from app.core.rate_limit import rate_limit_dependency
-from app.models.models import User, ComplianceAuditLog
+from app.models.models import User, ComplianceAuditLog, Document
 from app.api.deps import get_current_user
 from app.schemas.chat import (
     ChatQueryRequest,
@@ -94,19 +94,50 @@ async def chat_query_stream(
 
         if eval_result["decision"] == "REFUSAL":
             refusal_text = eval_result["message"]
-            notice_prefix = f"[OUTSIDE_CONTEXT]\n{refusal_text}\n\n"
+
+            # Check if this account has any indexed chunks in vector store
+            has_account_docs = False
+            try:
+                sample = vector_store.collection.get(
+                    where={"account_id": str(current_user.account_id)},
+                    limit=1,
+                )
+                has_account_docs = bool(sample and sample.get("ids"))
+            except Exception:
+                has_account_docs = False
+
+            notice_tag = "[OUTSIDE_CONTEXT]" if has_account_docs else "[NO_DOCS_UPLOADED]"
+            notice_prefix = f"{notice_tag}\n{refusal_text}\n\n"
             yield f"event: token\ndata: {json.dumps({'token': notice_prefix})}\n\n"
             accumulated_text.append(notice_prefix)
 
-            # Generate an articulate, professional, and concise advisory answer
+            # Generate an articulate, professional, and concise advisory answer (ChatGPT/Gemini style)
             try:
-                system_prompt = (
-                    "You are a professional wealth management and financial advisory assistant. "
-                    "The user's query is outside the specific context of their institution's uploaded policy documents. "
-                    "Provide an articulate, concise, and highly professional answer adhering to general industry "
-                    "standards and best practices. Structure your response clearly using clean markdown, headings, "
-                    "and bullet points where appropriate. Do not fabricate specific internal bank policies."
-                )
+                if not has_account_docs:
+                    system_prompt = (
+                        "You are WealthGuard AI, a friendly, intelligent, and articulate advisory assistant (like ChatGPT / Gemini). "
+                        "There are currently NO policy PDF documents uploaded to the user's workspace yet. "
+                        "Explain warmly that WealthGuard AI is designed to ground advisory answers and cite specific clauses "
+                        "from approved PDF files (such as policy manuals, tax circulars, and product term sheets). "
+                        "Provide a warm, articulate, step-by-step guide explaining how they can upload their PDFs right now: "
+                        "1. Click the Document Store tab in the top navigation bar. "
+                        "2. Click the Upload Document button in the upper right. "
+                        "3. Select their policy PDF file from their device (up to 25MB). "
+                        "4. Specify the Document Type, Version, and Effective Date. "
+                        "5. Click Upload & Process — clauses will be parsed and embedded automatically. "
+                        "If the user asked a casual greeting (like 'yyyoo??', 'what's up'), greet them back warmly first before explaining. "
+                        "Format your response cleanly using markdown with bullet points where appropriate."
+                    )
+                else:
+                    system_prompt = (
+                        "You are WealthGuard AI, an intelligent, articulate, and friendly financial advisory assistant (like ChatGPT / Gemini). "
+                        "The user's query is outside the specific context of their institution's uploaded policy documents. "
+                        "Provide an articulate, concise, and highly professional answer: "
+                        "- If it is a casual greeting or conversational remark (like 'yyyoo??', 'sup', 'hello'): respond naturally and warmly ('What's up! Ask me any questions if you'd like...'). "
+                        "- If it is a general advisory or financial question outside the PDFs: answer it professionally and concisely adhering to general industry standards. "
+                        "- Remind the user that for bank-specific policies, they can query rules from their uploaded documentation. "
+                        "Format your response cleanly using markdown with headings or bullet points where appropriate."
+                    )
                 user_prompt = f"User Question: {request.query}"
                 async for token in llm_service.stream_generate(system_prompt, user_prompt):
                     accumulated_text.append(token)
@@ -133,18 +164,50 @@ async def chat_query_stream(
             return
 
         if eval_result["decision"] == "CAPABILITY":
-            help_text = eval_result["message"]
-            words = help_text.split(" ")
-            for i, word in enumerate(words):
-                token = word + (" " if i < len(words) - 1 else "")
-                yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
-                accumulated_text.append(token)
-                await asyncio.sleep(0.01)
+            has_account_docs = False
+            try:
+                sample = vector_store.collection.get(
+                    where={"account_id": str(current_user.account_id)},
+                    limit=1,
+                )
+                has_account_docs = bool(sample and sample.get("ids"))
+            except Exception:
+                has_account_docs = False
+
+            notice_tag = "[OUTSIDE_CONTEXT]" if has_account_docs else "[NO_DOCS_UPLOADED]"
+            notice_prefix = f"{notice_tag}\n"
+            yield f"event: token\ndata: {json.dumps({'token': notice_prefix})}\n\n"
+            accumulated_text.append(notice_prefix)
+
+            # Generate dynamic, friendly, articulate response (ChatGPT/Gemini style)
+            try:
+                system_prompt = (
+                    "You are WealthGuard AI, a friendly, articulate, highly intelligent advisory assistant (like ChatGPT / Gemini). "
+                    "The user is asking a conversational question, greeting you, or inquiring how you can help them. "
+                    "Respond warmly, conversationally, and articulately: "
+                    "- If they ask 'how can you help me ?' or similar: explain clearly that your primary power is clarifying, "
+                    "analyzing, and answering questions around the policy PDFs they upload (such as tax circulars, fund terms, "
+                    "and compliance rules), while also answering general wealth advisory inquiries. "
+                    "- If they say a casual greeting (like 'yyyoo??', 'what's up', 'hello'): greet them back warmly and conversationally "
+                    "('What's up! Ask me any question if you'd like — I'm ready to help you explore your uploaded policy documents or discuss wealth advisory topics.'). "
+                    + ("If they have no documents uploaded yet, also remind them how to upload their first PDF document." if not has_account_docs else "")
+                    + "Format your response cleanly using markdown with bullet points where appropriate."
+                )
+                user_prompt = f"User Question: {request.query}"
+                async for token in llm_service.stream_generate(system_prompt, user_prompt):
+                    accumulated_text.append(token)
+                    yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
+            except Exception as e:
+                logger.warning("Dynamic capability generation fallback: %s", e)
+                help_text = eval_result["message"]
+                yield f"event: token\ndata: {json.dumps({'token': help_text})}\n\n"
+                accumulated_text.append(help_text)
 
             yield f"event: citations\ndata: {json.dumps([])}\n\n"
             yield "event: done\ndata: [DONE]\n\n"
 
             latency = int((time.time() - start_time) * 1000)
+            full_response = "".join(accumulated_text)
             record_audit_log(
                 account_id=current_user.account_id,
                 user_id=current_user.id,
@@ -152,8 +215,8 @@ async def chat_query_stream(
                 rewritten_query=eval_result["rewritten_query"],
                 chunk_ids=[],
                 score=1.0,
-                response_text=help_text,
-                is_refusal=False,
+                response_text=full_response,
+                is_refusal=True,
                 latency_ms=latency,
             )
             return
