@@ -143,11 +143,12 @@ export default function AuthModule({ initialTab = "signin" }: AuthModuleProps) {
     setServerError(null);
     setSuccessMessage(null);
     try {
-      await login(data.email, data.password);
+      const cleanEmail = data.email.trim().toLowerCase();
+      await login(cleanEmail, data.password);
       setSuccessMessage("Authentication verified. Redirecting to advisory workspace...");
       setTimeout(() => {
-        router.push("/");
-      }, 600);
+        window.location.href = "/";
+      }, 500);
     } catch (err: any) {
       setServerError(err.message || "Invalid email or password");
     }
@@ -158,11 +159,13 @@ export default function AuthModule({ initialTab = "signin" }: AuthModuleProps) {
     setServerError(null);
     setSuccessMessage(null);
     try {
-      await signup(data.fullName, data.email, data.password);
+      const cleanEmail = data.email.trim().toLowerCase();
+      await signup(data.fullName.trim(), cleanEmail, data.password);
+      setValueSignIn("email", cleanEmail);
       setSuccessMessage("Account created successfully! Redirecting to advisory workspace...");
       setTimeout(() => {
-        router.push("/");
-      }, 800);
+        window.location.href = "/";
+      }, 500);
     } catch (err: any) {
       setServerError(err.message || "Registration failed. Please try again.");
     }

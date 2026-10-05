@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     CHROMA_PERSIST_DIR: str = "./data/chromadb"
     VECTOR_DB_PATH: Optional[str] = None
     VECTOR_DB_TYPE: str = "chromadb"
-    SIMILARITY_THRESHOLD: float = 0.68
+    SIMILARITY_THRESHOLD: float = 0.50
 
     # LLM (Groq)
     LLM_PROVIDER: str = "groq"
