@@ -70,15 +70,33 @@ async def add_security_headers(request: Request, call_next):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
     return response
 
-# Configure CORS with strict origin controls and support for Vercel preview/production domains
+# Configure CORS to allow all web origins (Vercel, Render, Localhost)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list or ["http://localhost:3000"],
-    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
+    allow_origin_regex=r"^https?:\/\/.*",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import logging
+    import traceback
+    logging.getLogger("app.main").error("Global unhandled exception: %s\n%s", exc, traceback.format_exc())
+    origin = request.headers.get("origin") or "*"
+    headers = {
+        "Access-Control-Allow-Origin": origin if origin != "*" else "*",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}"},
+        headers=headers,
+    )
 
 # Mount API Routers under /api/v1 (standard) and /v1 (serverless rewrite alias)
 app.include_router(auth_router, prefix="/api/v1")

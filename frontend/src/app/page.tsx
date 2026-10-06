@@ -29,8 +29,8 @@ const SUGGESTED_QUERIES_WITH_DOCS = [
 ];
 
 const SUGGESTED_QUERIES_ZERO_DOCS = [
-  "how can you help me ?",
-  "yyyoo??",
+  "How can you help me?",
+  "Who are you and what can you do?",
   "How do I upload and manage policy documents?",
   "What document formats and policy types are supported?",
 ];
@@ -136,6 +136,7 @@ export default function ChatPage() {
           const lastIdx = updated.length - 1;
           if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
             const isOutOfContext =
+              streamedContent.includes("[ALERT: OUTSIDE_PDF_SCOPE]") ||
               streamedContent.includes("[OUTSIDE_CONTEXT]") ||
               streamedContent.includes("[NO_DOCS_UPLOADED]") ||
               streamedContent.includes("I cannot find approved bank guidance on this topic") ||
@@ -229,6 +230,30 @@ export default function ChatPage() {
 
   const renderFormattedMessage = (rawContent: string, citations?: Citation[], isRefusal?: boolean) => {
     let content = rawContent;
+
+    if (content.startsWith("Error:")) {
+      return (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 p-3.5 text-rose-200">
+          <div className="flex items-center gap-2 font-bold text-rose-400 text-xs sm:text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>Advisory Service Notice</span>
+          </div>
+          <p className="mt-1 text-xs text-rose-200/90 leading-relaxed font-sans">
+            {content.replace(/^Error:\s*/, "")}
+          </p>
+        </div>
+      );
+    }
+
+    if (!content.trim()) {
+      return (
+        <div className="flex items-center gap-2 text-slate-400 py-1 text-xs">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-gold-400 shrink-0" />
+          <span className="font-sans">Generating response...</span>
+        </div>
+      );
+    }
+
     let isNoDocs = false;
     let isOutOfContext = isRefusal || false;
 
@@ -236,6 +261,11 @@ export default function ChatPage() {
       isNoDocs = true;
       isOutOfContext = true;
       content = content.replace(/\[NO_DOCS_UPLOADED\]\s*/g, "");
+    }
+
+    if (content.includes("[ALERT: OUTSIDE_PDF_SCOPE]")) {
+      isOutOfContext = true;
+      content = content.replace(/\[ALERT: OUTSIDE_PDF_SCOPE\]\s*/g, "");
     }
 
     if (content.includes("[OUTSIDE_CONTEXT]")) {
@@ -385,25 +415,25 @@ export default function ChatPage() {
 
     return (
       <div className="space-y-2">
-        {/* Prominent Red Line Notice for Questions Outside Uploaded PDFs */}
+        {/* Prominent Alert Notice for Questions Outside Uploaded PDFs */}
         {isOutOfContext && (
-          <div className="mb-3.5 overflow-hidden rounded-xl border-l-4 border-rose-500 bg-rose-950/40 p-3 sm:p-4 text-rose-200 border-y border-r border-rose-500/25 shadow-lg shadow-rose-950/50 backdrop-blur-md">
+          <div className="mb-3.5 overflow-hidden rounded-xl border-l-4 border-amber-500 bg-amber-950/40 p-3 sm:p-4 text-amber-200 border-y border-r border-amber-500/25 shadow-lg shadow-amber-950/40 backdrop-blur-md">
             <div className="flex items-center justify-between gap-2 pb-1.5">
               <div className="flex items-center gap-2">
-                <span className="flex h-2.5 w-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
-                <span className="font-heading text-xs sm:text-sm font-bold uppercase tracking-wider text-rose-400">
-                  {isNoDocs ? "No PDFs Uploaded Yet — Grounding Inactive" : "Not Related to Uploaded PDFs — Out of Context"}
+                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                <span className="font-heading text-xs sm:text-sm font-bold uppercase tracking-wider text-amber-300">
+                  {isNoDocs ? "No Policy PDFs In System" : "Notice: Question Outside Uploaded PDF Scope"}
                 </span>
               </div>
-              <span className="font-condensed text-[10px] sm:text-[11px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                {isNoDocs ? "Upload Required" : "Advisory Notice"}
+              <span className="font-condensed text-[10px] sm:text-[11px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {isNoDocs ? "Upload Required" : "Advisory Alert"}
               </span>
             </div>
 
-            {/* Glowing Red Line Accent */}
-            <div className="h-0.5 w-full bg-gradient-to-r from-rose-500 via-rose-400/80 to-transparent my-1.5" />
+            {/* Glowing Amber Line Accent */}
+            <div className="h-0.5 w-full bg-gradient-to-r from-amber-500 via-amber-400/80 to-transparent my-1.5" />
 
-            <p className="mt-1 text-xs sm:text-[12.5px] font-sans text-rose-200/90 leading-relaxed">
+            <p className="mt-1 text-xs sm:text-[12.5px] font-sans text-amber-200/90 leading-relaxed">
               {isNoDocs ? (
                 <>
                   Your workspace currently has <strong className="text-white font-semibold">no policy PDF documents uploaded</strong>.
@@ -411,20 +441,20 @@ export default function ChatPage() {
                 </>
               ) : (
                 <>
-                  This question is <strong className="text-white font-semibold">not related to or found in your uploaded PDF documents</strong>. 
-                  The response below is provided for conversational or general wealth advisory context.
+                  This question is <strong className="text-white font-semibold">not found in or covered by your uploaded PDF documents</strong>. 
+                  The response below is provided for general advisory context. For verified bank policy decisions, refer to your approved PDFs.
                 </>
               )}
             </p>
 
             {isNoDocs && (
-              <div className="mt-3 pt-2.5 border-t border-rose-500/20 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] text-rose-300/80 font-sans">
+              <div className="mt-3 pt-2.5 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] text-amber-300/80 font-sans">
                   Ready to add your policy guidelines?
                 </span>
                 <Link
                   href="/documents"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 text-navy-950 font-bold font-condensed text-xs uppercase tracking-wider transition-all shadow-md shadow-rose-950/40"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-navy-950 font-bold font-condensed text-xs uppercase tracking-wider transition-all shadow-md shadow-amber-950/40"
                 >
                   <FileUp className="h-3.5 w-3.5" />
                   <span>Go to Document Store &amp; Upload PDF</span>
@@ -439,8 +469,8 @@ export default function ChatPage() {
           {elements.length > 0 ? (
             elements
           ) : (
-            <p className="text-slate-300 text-xs sm:text-[13px] leading-relaxed font-sans">
-              {content || "No verified documentation was found for this specific query."}
+            <p className="text-slate-200 text-xs sm:text-[13px] leading-relaxed font-sans">
+              {content}
             </p>
           )}
         </div>
@@ -588,6 +618,11 @@ export default function ChatPage() {
                     >
                       {isUser ? (
                         <p className="whitespace-pre-wrap font-sans leading-relaxed">{msg.content}</p>
+                      ) : !msg.content && isGenerating ? (
+                        <div className="flex items-center gap-2.5 text-slate-300 py-1">
+                          <Loader2 className="h-4 w-4 animate-spin text-gold-400 shrink-0" />
+                          <span className="font-sans text-xs sm:text-[13px]">Searching knowledge store and generating response...</span>
+                        </div>
                       ) : (
                         renderFormattedMessage(msg.content, msg.citations, isRefusal)
                       )}
@@ -596,18 +631,6 @@ export default function ChatPage() {
                 );
               })}
             </>
-          )}
-
-          {isGenerating && messages[messages.length - 1]?.content === "" && (
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-xl bg-gold-500/15 border border-gold-500/30 text-gold-400 shrink-0">
-                <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              </div>
-              <div className="glass-panel rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-[13px] text-slate-400 flex items-center gap-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-gold-400" />
-                <span className="font-sans">Searching knowledge store and generating response...</span>
-              </div>
-            </div>
           )}
 
           <div ref={chatEndRef} />
@@ -643,7 +666,7 @@ export default function ChatPage() {
             </button>
           </form>
           <div className="mt-1.5 sm:mt-2 text-center font-condensed text-[10px] sm:text-[11px] text-slate-500 uppercase tracking-wider">
-            Grounded in current-version documentation. External questions highlighted with red line notice.
+            Grounded in current-version documentation. Questions outside uploaded PDFs are highlighted with an advisory notice.
           </div>
         </div>
       </main>

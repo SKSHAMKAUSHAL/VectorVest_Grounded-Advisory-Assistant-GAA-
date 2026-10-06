@@ -19,7 +19,7 @@ from app.schemas.chat import (
     SemanticSearchResponse,
     SemanticSearchResultItem,
 )
-from app.services.rag import rag_pipeline
+from app.services.rag import rag_pipeline, REFUSAL_MESSAGE
 from app.services.llm import llm_service
 from app.services.vector_store import vector_store
 
@@ -92,58 +92,37 @@ async def chat_query_stream(
     async def sse_event_stream() -> AsyncGenerator[str, None]:
         accumulated_text = []
 
-        if eval_result["decision"] == "REFUSAL":
-            refusal_text = eval_result["message"]
-
-            # Check if this account has any indexed chunks in vector store
-            has_account_docs = False
-            try:
-                sample = vector_store.collection.get(
-                    where={"account_id": str(current_user.account_id)},
-                    limit=1,
-                )
-                has_account_docs = bool(sample and sample.get("ids"))
-            except Exception:
-                has_account_docs = False
-
-            notice_tag = "[OUTSIDE_CONTEXT]" if has_account_docs else "[NO_DOCS_UPLOADED]"
-            notice_prefix = f"{notice_tag}\n{refusal_text}\n\n"
+        if eval_result["decision"] in ("REFUSAL", "UNGROUNDED_QUERY"):
+            notice_tag = "[ALERT: OUTSIDE_PDF_SCOPE]"
+            notice_prefix = f"{notice_tag}\n{REFUSAL_MESSAGE}\n\n"
             yield f"event: token\ndata: {json.dumps({'token': notice_prefix})}\n\n"
             accumulated_text.append(notice_prefix)
 
-            # Generate an articulate, professional, and concise advisory answer (ChatGPT/Gemini style)
+            # Generate direct, articulate response for questions not in uploaded PDFs
+            system_prompt = (
+                "You are WealthGuard AI, a friendly, intelligent, and articulate financial advisory assistant. "
+                "The user is asking a question that is outside the specific content of their uploaded policy documents. "
+                "Answer the user's question directly, politely, and accurately: "
+                "- If it is a greeting or casual question (e.g. 'How are you?', 'who are you?', 'how', 'hi'): answer warmly and conversationally "
+                "(e.g., 'I am fine, thank you! I am here to assist you with the policy documents you upload...'). "
+                "- If it is 'Who are you?': answer clearly: 'I am WealthGuard AI, your Grounded Advisory Assistant. "
+                "I am here to assist you with the policy documents you upload, answer banking and compliance queries with verified clause citations, and help you navigate financial regulations.' "
+                "- If it is a financial or general question: answer it clearly and professionally according to standard principles. "
+                "Format your response cleanly using markdown with bullet points where appropriate."
+            )
+            user_prompt = f"User Question: {request.query}"
             try:
-                if not has_account_docs:
-                    system_prompt = (
-                        "You are WealthGuard AI, a friendly, intelligent, and articulate advisory assistant (like ChatGPT / Gemini). "
-                        "There are currently NO policy PDF documents uploaded to the user's workspace yet. "
-                        "Explain warmly that WealthGuard AI is designed to ground advisory answers and cite specific clauses "
-                        "from approved PDF files (such as policy manuals, tax circulars, and product term sheets). "
-                        "Provide a warm, articulate, step-by-step guide explaining how they can upload their PDFs right now: "
-                        "1. Click the Document Store tab in the top navigation bar. "
-                        "2. Click the Upload Document button in the upper right. "
-                        "3. Select their policy PDF file from their device (up to 25MB). "
-                        "4. Specify the Document Type, Version, and Effective Date. "
-                        "5. Click Upload & Process — clauses will be parsed and embedded automatically. "
-                        "If the user asked a casual greeting (like 'yyyoo??', 'what's up'), greet them back warmly first before explaining. "
-                        "Format your response cleanly using markdown with bullet points where appropriate."
-                    )
-                else:
-                    system_prompt = (
-                        "You are WealthGuard AI, an intelligent, articulate, and friendly financial advisory assistant (like ChatGPT / Gemini). "
-                        "The user's query is outside the specific context of their institution's uploaded policy documents. "
-                        "Provide an articulate, concise, and highly professional answer: "
-                        "- If it is a casual greeting or conversational remark (like 'yyyoo??', 'sup', 'hello'): respond naturally and warmly ('What's up! Ask me any questions if you'd like...'). "
-                        "- If it is a general advisory or financial question outside the PDFs: answer it professionally and concisely adhering to general industry standards. "
-                        "- Remind the user that for bank-specific policies, they can query rules from their uploaded documentation. "
-                        "Format your response cleanly using markdown with headings or bullet points where appropriate."
-                    )
-                user_prompt = f"User Question: {request.query}"
                 async for token in llm_service.stream_generate(system_prompt, user_prompt):
                     accumulated_text.append(token)
                     yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
             except Exception as e:
-                logger.warning("Out-of-context general generation failed: %s", e)
+                logger.warning("Ungrounded query streaming fallback: %s", e)
+                fallback_msg = (
+                    "I am here to assist you with the policy documents you upload, answer compliance and financial questions, "
+                    "and help you navigate bank guidelines."
+                )
+                yield f"event: token\ndata: {json.dumps({'token': fallback_msg})}\n\n"
+                accumulated_text.append(fallback_msg)
 
             yield f"event: citations\ndata: {json.dumps([])}\n\n"
             yield "event: done\ndata: [DONE]\n\n"
@@ -182,16 +161,13 @@ async def chat_query_stream(
             # Generate dynamic, friendly, articulate response (ChatGPT/Gemini style)
             try:
                 system_prompt = (
-                    "You are WealthGuard AI, a friendly, articulate, highly intelligent advisory assistant (like ChatGPT / Gemini). "
-                    "The user is asking a conversational question, greeting you, or inquiring how you can help them. "
-                    "Respond warmly, conversationally, and articulately: "
-                    "- If they ask 'how can you help me ?' or similar: explain clearly that your primary power is clarifying, "
-                    "analyzing, and answering questions around the policy PDFs they upload (such as tax circulars, fund terms, "
-                    "and compliance rules), while also answering general wealth advisory inquiries. "
-                    "- If they say a casual greeting (like 'yyyoo??', 'what's up', 'hello'): greet them back warmly and conversationally "
-                    "('What's up! Ask me any question if you'd like — I'm ready to help you explore your uploaded policy documents or discuss wealth advisory topics.'). "
-                    + ("If they have no documents uploaded yet, also remind them how to upload their first PDF document." if not has_account_docs else "")
-                    + "Format your response cleanly using markdown with bullet points where appropriate."
+                    "You are WealthGuard AI, an articulate, friendly, and intelligent advisory assistant. "
+                    "- If the user asks 'How are you?': respond warmly (e.g. 'I am fine, thank you! How can I assist you with your advisory documents today?'). "
+                    "- If the user asks 'Who are you?': respond clearly: 'I am WealthGuard AI, your Grounded Advisory Assistant. "
+                    "I am here to assist you with the policy documents and circulars you upload, answer banking and compliance queries with verified clause citations, and help you navigate financial guidelines.' "
+                    "- If the user asks 'How can you help me?': explain your core capabilities (answering questions grounded in uploaded policy PDFs, providing clause citations, explaining tax and fund rules). "
+                    + ("If they have no documents uploaded yet, also remind them how to upload their first PDF document in the Document Store." if not has_account_docs else "")
+                    + " Format your response cleanly using markdown."
                 )
                 user_prompt = f"User Question: {request.query}"
                 async for token in llm_service.stream_generate(system_prompt, user_prompt):
@@ -199,7 +175,10 @@ async def chat_query_stream(
                     yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
             except Exception as e:
                 logger.warning("Dynamic capability generation fallback: %s", e)
-                help_text = eval_result["message"]
+                help_text = (
+                    "I am fine, thank you! I am WealthGuard AI, your Grounded Advisory Assistant. "
+                    "I am here to assist you with your uploaded banking documents, compliance guidelines, and advisory rules."
+                )
                 yield f"event: token\ndata: {json.dumps({'token': help_text})}\n\n"
                 accumulated_text.append(help_text)
 
@@ -216,7 +195,7 @@ async def chat_query_stream(
                 chunk_ids=[],
                 score=1.0,
                 response_text=full_response,
-                is_refusal=True,
+                is_refusal=False,
                 latency_ms=latency,
             )
             return
@@ -305,11 +284,37 @@ def chat_query_sync(
     )
 
     if eval_result["decision"] == "REFUSAL":
-        response_text = eval_result["message"]
+        response_text = REFUSAL_MESSAGE
         is_refusal = True
         citations = []
+    elif eval_result["decision"] == "UNGROUNDED_QUERY":
+        system_prompt = (
+            "You are WealthGuard AI, a friendly, intelligent, and articulate financial advisory assistant. "
+            "The user is asking a question that is outside the specific content of their uploaded policy documents. "
+            "Answer the user's question directly, politely, and accurately: "
+            "- If it is a greeting or casual question (e.g. 'How are you?', 'who are you?', 'how', 'hi'): answer warmly "
+            "(e.g., 'I am fine, thank you! I am here to assist you with the policy documents you upload...'). "
+            "- If it is 'Who are you?': answer clearly: 'I am WealthGuard AI, your Grounded Advisory Assistant. "
+            "I am here to assist you with the policy documents you upload, answer banking and compliance queries with verified clause citations, and help you navigate financial regulations.' "
+            "- If it is a financial or general question: answer it clearly and professionally according to standard principles. "
+            "Format your response cleanly using markdown with bullet points where appropriate."
+        )
+        user_prompt = f"User Question: {request.query}"
+        ans = llm_service.generate(system_prompt, user_prompt)
+        response_text = f"[ALERT: OUTSIDE_PDF_SCOPE]\n{ans}"
+        is_refusal = False
+        citations = []
     elif eval_result["decision"] == "CAPABILITY":
-        response_text = eval_result["message"]
+        system_prompt = (
+            "You are WealthGuard AI, an articulate, friendly, and intelligent advisory assistant. "
+            "- If the user asks 'How are you?': respond warmly (e.g. 'I am fine, thank you! How can I assist you with your advisory documents today?'). "
+            "- If the user asks 'Who are you?': respond clearly: 'I am WealthGuard AI, your Grounded Advisory Assistant. "
+            "I am here to assist you with the policy documents and circulars you upload, answer banking and compliance queries with verified clause citations, and help you navigate financial guidelines.' "
+            "- If the user asks 'How can you help me?': explain your core capabilities (answering questions grounded in uploaded policy PDFs, providing clause citations, explaining tax and fund rules). "
+            "Format cleanly using markdown."
+        )
+        user_prompt = f"User Question: {request.query}"
+        response_text = llm_service.generate(system_prompt, user_prompt)
         is_refusal = False
         citations = []
     else:

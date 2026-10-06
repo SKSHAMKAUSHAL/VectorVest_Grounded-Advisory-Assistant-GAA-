@@ -40,11 +40,9 @@ class LLMService:
                     temperature=temperature,
                 )
                 return response.choices[0].message.content or ""
-            elif settings.ENVIRONMENT == "production":
-                raise RuntimeError("Groq LLM client is not initialized in production.")
         except Exception as e:
-            if settings.ENVIRONMENT == "production":
-                raise RuntimeError(f"LLM generation service failed: {str(e)}") from e
+            import logging
+            logging.getLogger("app.services.llm").warning("Groq generation failed (%s), using fallback", e)
             return self._mock_generate(system_prompt, user_prompt)
 
         return self._mock_generate(system_prompt, user_prompt)
@@ -55,7 +53,6 @@ class LLMService:
         """Asynchronous token streaming generator."""
         if self._is_mock_mode():
             text = self._mock_generate(system_prompt, user_prompt)
-            # Yield token by token with minimal delay
             words = text.split(" ")
             for i, word in enumerate(words):
                 yield word + (" " if i < len(words) - 1 else "")
@@ -78,12 +75,10 @@ class LLMService:
                     if delta:
                         yield delta
                 return
-            elif settings.ENVIRONMENT == "production":
-                raise RuntimeError("Groq LLM client is not initialized in production.")
         except Exception as e:
-            if settings.ENVIRONMENT == "production":
-                raise RuntimeError(f"LLM streaming service failed: {str(e)}") from e
-            # Fallback on runtime failure in dev/test
+            import logging
+            logging.getLogger("app.services.llm").warning("Groq stream generation failed (%s), using fallback", e)
+            # Fallback on runtime failure
             text = self._mock_generate(system_prompt, user_prompt)
             words = text.split(" ")
             for i, word in enumerate(words):

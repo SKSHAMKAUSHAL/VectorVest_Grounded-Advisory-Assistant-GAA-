@@ -54,6 +54,10 @@ _CAPABILITY_PATTERNS = [
     r"\bwhat can you do\b",
     r"\bwhat do you do\b",
     r"\bwho are you\b",
+    r"\bwhat are you\b",
+    r"\bwho made you\b",
+    r"\bwhat is your name\b",
+    r"\btell me about yourself\b",
     r"\bwhat is (this|wealthguard|gaa)\b",
     r"\bwhat questions can i ask\b",
     r"\bwhat can i ask\b",
@@ -61,6 +65,12 @@ _CAPABILITY_PATTERNS = [
     r"\bhow (do|can) i (add|upload) (a )?pdf\b",
     r"\bhow to (add|upload) (a )?pdf\b",
     r"^\s*help\s*$",
+    r"\bhow are you\b",
+    r"\bhow r u\b",
+    r"\bhow's it going\b",
+    r"^\s*how\s*\??\s*$",
+    r"^\s*who\s*\??\s*$",
+    r"^\s*what\s*\??\s*$",
     r"^\s*(hello|hi|hey|heyy+|greetings|good morning|good afternoon|good evening|yy+oo+|yo|what'?s up|sup)\b",
 ]
 
@@ -273,7 +283,7 @@ class RAGPipeline:
 
         top_score = candidates[0]["score"] if candidates else 0.0
 
-        # 4. Confidence guardrail gate: prune low confidence or ungrounded queries
+        # 4. Confidence evaluation: if query is not covered in uploaded documents, return REFUSAL
         if not candidates or top_score < self.threshold:
             return {
                 "decision": "REFUSAL",
@@ -284,6 +294,7 @@ class RAGPipeline:
                 "retrieved_chunk_ids": [c["id"] for c in candidates],
                 "context": "",
                 "is_refusal": True,
+                "is_unrelated": True,
             }
 
         # 4. Assemble context and citations
